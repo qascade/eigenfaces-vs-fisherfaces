@@ -70,31 +70,68 @@ meaning.
 
 \begin{table}[htbp]
 \centering
+\small
 \begin{tabular}{cll}
 \toprule
-Symbol & Meaning & Value in our experiments \\
+Symbol & Meaning & Value / note \\
 \midrule
-$d$        & number of pixels in one image (the dimension) & ORL $10304$, Yale $32256$ \\
-$N$        & number of training images in total            & ORL $192$, Yale $1520$ \\
-$c$        & number of classes (= number of people)        & ORL $32$ or $40$, Yale $38$ \\
-$n_i$      & number of training images of person $i$       & ORL $6$, Yale $40$ \\
-$x$        & one image, as a column vector in $\R^d$       & \\
-$\mu$      & mean of all training images (``mean face'')   & \\
-$\mu_i$    & mean of the images of class $i$               & \\
-$A$        & $d\times N$ matrix of mean-subtracted images  & $A = X - \mu$ \\
-$C$        & total covariance matrix $\tfrac{1}{N}AA^{\!\top}$ & $d\times d$ \\
-$\St,\Sb,\Sw$ & total, between-class, within-class scatter & $d\times d$ \\
-$k$        & number of eigenfaces kept                     & swept $1\ldots170$ \\
-$m$        & number of PCA dimensions kept \emph{before} LDA & paper uses $N-c$ \\
-$U$        & matrix whose columns are eigenfaces           & $d\times k$ \\
-$W$        & matrix whose columns are Fisherfaces          & $d\times(c-1)$ \\
+\multicolumn{3}{l}{\emph{PCA --- the notation used in the course slides and HW3 Q1}}\\
+$d$                & number of pixels in one image            & ORL $10304$, Yale $32256$ \\
+$N$                & number of training images                & ORL $192$, Yale $1520$ \\
+$x_i$              & the $i$th training image, in $\R^d$      & $i = 1,\dots,N$ \\
+$\bar{x}$          & mean of the training images (mean face)  & $\bar{x}=\tfrac1N\sum_i x_i$ \\
+$\bar{x}_i$        & the $i$th mean-deducted image            & $\bar{x}_i = x_i - \bar{x}$ \\
+$X$                & $[\,\bar{x}_1|\cdots|\bar{x}_N\,]$       & $d\times N$ \\
+$C$                & covariance matrix, $C \propto XX^{\!\top}$ & $d\times d$ \\
+$S$                & scatter matrix $\sum_i \bar{x}_i\bar{x}_i^{\!\top} = XX^{\!\top}$ & $S=(N-1)C$ \\
+$L$                & the small matrix $X^{\!\top}\!X$          & $N\times N$ \\
+$w$                & an eigenvector of $L$                    & $w\in\R^N$ \\
+$V$                & eigenvector matrix of $C$, $CV=V\Lambda$ & $d\times d$, $V^{\!\top}V=I$ \\
+$V_l$              & the $l$th eigenvector (an eigenface)     & $V_l\in\R^d$ \\
+$\hat{V}_k$        & the eigenspace $V(:,1{:}k)$              & $d\times k$ \\
+$\Lambda,\lambda_l$ & eigenvalues, $\lambda_1\ge\cdots\ge\lambda_d\ge 0$ & \\
+$\alpha_{il}$      & $l$th eigen-coefficient of $x_i$         & $\alpha_{il}=V_l^{\!\top}\bar{x}_i$ \\
+$\tilde{x}_i$      & rank-$k$ approximation to $x_i$          & \\
+$u$, $J(u)$        & a candidate direction, and its total reconstruction error & \\
+$k$                & number of eigenfaces kept                & swept $1\ldots170$ \\
+\midrule
+\multicolumn{3}{l}{\emph{LDA --- additional symbols (Duda, Hart \& Stork)}}\\
+$c$                & number of classes (people)               & ORL $32$ or $40$, Yale $38$ \\
+$j$                & class index                              & $j = 1,\dots,c$ \\
+$n_j$              & training images of person $j$            & ORL $6$, Yale $40$ \\
+$\mu_j$            & mean of the images of class $j$          & \\
+$\St,\Sb,\Sw$      & total, between-class, within-class scatter & \\
+$m$                & PCA dimensions kept \emph{before} LDA    & paper uses $N-c$ \\
+$w_l$, $W$         & the $l$th Fisherface, and their matrix   & $d\times(c-1)$ \\
 \bottomrule
 \end{tabular}
-\caption{Notation. ``Scatter'' means a sum of outer products with \emph{no}
-division by $N$; ``covariance'' means the same thing divided by $N$. The
-distinction matters in Section~\ref{sec:scaling}.}
+\caption{Notation. The PCA block follows the course slides (``PCA: algorithm'',
+slides 98--113) and the HW3 problem sheet, so this guide can be read side by side
+with them.}
 \label{tab:notation}
 \end{table}
+
+\paragraph{A note on symbols.} Three indices are used and never swap roles: $i$
+runs over \textbf{training images}, $l$ over \textbf{components} (eigenfaces or
+Fisherfaces), and $j$ over \textbf{classes}.
+
+Two cautions, both of which come from following the sources faithfully.
+\emph{First}, the letter $w$ does double duty: in Part~I it is an eigenvector of
+the small matrix $L=X^{\!\top}\!X$ and lives in $\R^N$ (slide 113), while in
+Parts~II--III it is a Fisher discriminant direction in $\R^d$. They never appear
+in the same derivation, and the dimension tells them apart.
+\emph{Second}, the slides define the covariance with the unbiased denominator,
+$C=\frac{1}{N-1}\sum_i \bar{x}_i\bar{x}_i^{\!\top}$, whereas the HW3 solution to
+Q1(i) --- and our code --- use $\frac{1}{N}$. The eigen\emph{vectors} are
+identical either way; only the eigenvalues differ by the factor
+$\tfrac{N-1}{N}$. We use $\frac{1}{N}$ throughout so that the reconstruction-error
+identity of Theorem~\ref{thm:recon} reads exactly as it does in the HW3 solution,
+and we flag the difference wherever eigenvalues are quoted numerically.
+
+\medskip
+\noindent\emph{Where the code differs.} The MATLAB script names the centred data
+matrix \texttt{A} rather than $X$, and the eigenface matrix \texttt{U} rather than
+$\hat{V}_k$; the mathematics is identical.
 
 \paragraph{Why stacking pixels into a vector is allowed.}
 A $112\times 92$ image has $10304$ numbers in it. Writing them as a $10304$-long
@@ -123,11 +160,11 @@ and the same answer drops out of three different starting questions.
 
 Let
 \[
-  \mu \;=\; \frac{1}{N}\sum_{j=1}^{N} x_j ,
+  \bar{x} \;=\; \frac{1}{N}\sum_{i=1}^{N} x_i ,
   \qquad
-  a_j \;=\; x_j - \mu ,
+  \bar{x}_i \;=\; x_i - \bar{x} ,
   \qquad
-  A \;=\; [\,a_1 \; a_2 \; \cdots \; a_N\,] \in \R^{d\times N}.
+  X \;=\; [\,\bar{x}_1 \; \bar{x}_2 \; \cdots \; \bar{x}_N\,] \in \R^{d\times N}.
 \]
 Subtracting the mean is not cosmetic. PCA looks for directions of large
 \emph{variance}, i.e.\ large spread \emph{about the centre}. If we skipped this
@@ -138,29 +175,29 @@ nothing about how faces differ from one another.
 \subsection{View 1: maximise the variance of the projection}
 
 Project every centred image onto a unit vector $u$ (so $u^{\!\top} u = 1$). Image
-$j$ becomes the single number $u^{\!\top} a_j$. The mean of these numbers is
+$i$ becomes the single number $u^{\!\top} \bar{x}_i$. The mean of these numbers is
 \[
-  \frac{1}{N}\sum_j u^{\!\top} a_j
-  \;=\; u^{\!\top}\!\left(\frac{1}{N}\sum_j a_j\right) \;=\; u^{\!\top} 0 \;=\; 0,
+  \frac{1}{N}\sum_i u^{\!\top} \bar{x}_i
+  \;=\; u^{\!\top}\!\left(\frac{1}{N}\sum_i \bar{x}_i\right) \;=\; u^{\!\top} 0 \;=\; 0,
 \]
-because the $a_j$ are already centred. So their variance is just the mean of their
+because the $\bar{x}_i$ are already centred. So their variance is just the mean of their
 squares:
 \[
   \operatorname{Var}(u)
-  \;=\; \frac{1}{N}\sum_{j=1}^{N}\bigl(u^{\!\top} a_j\bigr)^2 .
+  \;=\; \frac{1}{N}\sum_{i=1}^{N}\bigl(u^{\!\top} \bar{x}_i\bigr)^2 .
 \]
-Now rewrite that sum as a matrix product. Since $u^{\!\top} a_j$ is a scalar, it
-equals its own transpose, so $(u^{\!\top} a_j)^2 = (u^{\!\top} a_j)(a_j^{\!\top} u)$. Therefore
+Now rewrite that sum as a matrix product. Since $u^{\!\top} \bar{x}_i$ is a scalar, it
+equals its own transpose, so $(u^{\!\top} \bar{x}_i)^2 = (u^{\!\top} \bar{x}_i)(\bar{x}_i^{\!\top} u)$. Therefore
 \[
   \operatorname{Var}(u)
-  = \frac{1}{N}\sum_j u^{\!\top} a_j a_j^{\!\top} u
-  = u^{\!\top}\!\left(\frac{1}{N}\sum_j a_j a_j^{\!\top}\right)\! u
+  = \frac{1}{N}\sum_i u^{\!\top} \bar{x}_i \bar{x}_i^{\!\top} u
+  = u^{\!\top}\!\left(\frac{1}{N}\sum_i \bar{x}_i \bar{x}_i^{\!\top}\right)\! u
   = u^{\!\top} C u,
   \qquad
-  C \;:=\; \frac{1}{N} A A^{\!\top}.
+  C \;:=\; \frac{1}{N} X X^{\!\top}.
 \]
 $C$ is the $d\times d$ covariance matrix. It is symmetric, because
-$(a_ja_j^{\!\top})^{\!\top} = a_ja_j^{\!\top}$, and positive semi-definite, because
+$(\bar{x}_i\bar{x}_i^{\!\top})^{\!\top} = \bar{x}_i\bar{x}_i^{\!\top}$, and positive semi-definite, because
 $u^{\!\top} C u$ is an average of squares and so is never negative.
 
 So the question is: maximise $u^{\!\top} C u$ subject to $u^{\!\top} u = 1$.
@@ -193,34 +230,34 @@ $Cu=\lambda u$ on the left by $u^{\!\top}$:
 The quantity we were maximising \emph{equals} the eigenvalue. So the best direction
 is the eigenvector with the \textbf{largest} eigenvalue, the second-best (among
 directions orthogonal to the first) is the next largest, and so on. The eigenvalue
-$\lambda_i$ literally is the variance captured by eigenvector $u_i$.
+$\lambda_l$ literally is the variance captured by eigenvector $V_l$.
 
 \subsection{View 2: minimise the reconstruction error}
 
 Suppose instead we ask for the $k$-dimensional subspace that reconstructs the data
-best. Let $U_k=[u_1\cdots u_k]$ have orthonormal columns, so $U_k^{\!\top} U_k=I_k$.
+best. Let $\hat{V}_k=[V_1\cdots \hat{V}_k]$ have orthonormal columns, so $\hat{V}_k^{\!\top} \hat{V}_k=I_k$.
 The best approximation of $a$ inside that subspace is the orthogonal projection
-$U_kU_k^{\!\top} a$, and the error is
+$\hat{V}_k\hat{V}_k^{\!\top} a$, and the error is
 \[
-  E \;=\; \frac{1}{N}\sum_{j=1}^N \bigl\| a_j - U_kU_k^{\!\top} a_j \bigr\|^2 .
+  E \;=\; \frac{1}{N}\sum_{i=1}^N \bigl\| \bar{x}_i - \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i \bigr\|^2 .
 \]
-Write $P=U_kU_k^{\!\top}$. Then $P$ is symmetric and $P^2=U_k(U_k^{\!\top} U_k)U_k^{\!\top}=U_kU_k^{\!\top}=P$,
+Write $P=\hat{V}_k\hat{V}_k^{\!\top}$. Then $P$ is symmetric and $P^2=\hat{V}_k(\hat{V}_k^{\!\top} \hat{V}_k)\hat{V}_k^{\!\top}=\hat{V}_k\hat{V}_k^{\!\top}=P$,
 i.e.\ $P$ is a projection. Expanding one term,
 \[
   \|a-Pa\|^2 = (a-Pa)^{\!\top}(a-Pa) = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} P^{\!\top} Pa
              = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} Pa
              = \|a\|^2 - a^{\!\top} Pa ,
 \]
-where we used $P^{\!\top} P = PP = P$. Averaging over $j$,
+where we used $P^{\!\top} P = PP = P$. Averaging over $i$,
 \[
-  E = \underbrace{\frac1N\sum_j\|a_j\|^2}_{\text{fixed, does not depend on }U_k}
-      \;-\; \frac1N\sum_j a_j^{\!\top} U_kU_k^{\!\top} a_j .
+  E = \underbrace{\frac1N\sum_i\|\bar{x}_i\|^2}_{\text{fixed, does not depend on }\hat{V}_k}
+      \;-\; \frac1N\sum_i \bar{x}_i^{\!\top} \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i .
 \]
 So minimising $E$ is the same as maximising the second term, and
 \[
-  \frac1N\sum_j a_j^{\!\top} U_kU_k^{\!\top} a_j
-  = \frac1N\sum_j \sum_{i=1}^{k} (u_i^{\!\top} a_j)^2
-  = \sum_{i=1}^{k} u_i^{\!\top} C u_i ,
+  \frac1N\sum_i \bar{x}_i^{\!\top} \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i
+  = \frac1N\sum_i \sum_{l=1}^{k} (V_l^{\!\top} \bar{x}_i)^2
+  = \sum_{l=1}^{k} V_l^{\!\top} C V_l ,
 \]
 which is exactly the total variance captured, i.e.\ View~1 summed over $k$
 directions. \textbf{Minimising reconstruction error and maximising captured
@@ -230,22 +267,22 @@ anything.
 
 \subsection{View 3: the SVD}
 
-Write the thin SVD $A = U\Sigma V^{\!\top}$, with $U\in\R^{d\times N}$ and
-$V\in\R^{N\times N}$ having orthonormal columns and $\Sigma$ diagonal with
+Write the thin SVD $X = V\Sigma Q^{\!\top}$, with $V\in\R^{d\times N}$ and
+$Q\in\R^{N\times N}$ having orthonormal columns and $\Sigma$ diagonal with
 $\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
 \[
-  C = \frac1N AA^{\!\top} = \frac1N U\Sigma V^{\!\top} V \Sigma U^{\!\top} = U\frac{\Sigma^2}{N}U^{\!\top},
+  C = \frac1N XX^{\!\top} = \frac1N U\Sigma \hat{V}_k^{\!\top}\hat{V}_k \Sigma U^{\!\top} = V\frac{\Sigma^2}{N}V^{\!\top},
 \]
-using $V^{\!\top} V=I$. This is already an eigendecomposition of $C$: the left
-singular vectors of $A$ \emph{are} the eigenfaces, and
+using $\hat{V}_k^{\!\top}\hat{V}_k=I$. This is already an eigendecomposition of $C$: the left
+singular vectors of $X$ \emph{are} the eigenfaces, and
 \[
-  \lambda_i = \frac{\sigma_i^2}{N}.
+  \lambda_l = \frac{\sigma_l^2}{N}.
 \]
-So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $A$
+So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $X$
 directly. Section~\ref{sec:eigvssvd} explains why the SVD route is numerically
 safer, and shows the two agreeing in our code.
 
-\section{The \texorpdfstring{$L=A^{\!\top}\!A$}{L = A'A} trick}
+\section{The \texorpdfstring{$L=X^{\!\top}\!X$}{L = X'X} trick}
 
 \paragraph{The problem.} $C$ is $d\times d$. For Yale, $d=32256$, so $C$ has
 $32256^2 = 1.04\times 10^9$ entries. At 8 bytes each that is $\mathbf{8.3}$~GB --
@@ -254,33 +291,33 @@ eigendecompose it. But we only have $N=1520$ images, so the data cannot possibly
 span more than $1520$ dimensions. The trick exploits exactly that.
 
 \begin{theorem}[Gram trick]\label{thm:gram}
-Let $A\in\R^{d\times N}$ and $L = A^{\!\top}\!A \in \R^{N\times N}$.
-If $Lv=\lambda v$ with $v \neq 0$ and $\lambda \neq 0$, then $u := Av$ satisfies
+Let $X\in\R^{d\times N}$ and $L = X^{\!\top}\!X \in \R^{N\times N}$.
+If $Lw=\lambda w$ with $w \neq 0$ and $\lambda \neq 0$, then $Xw$ satisfies
 \[
-  (AA^{\!\top})\,u \;=\; \lambda\, u ,
+  (XX^{\!\top})(Xw) \;=\; \lambda\,(Xw) ,
 \]
-so $Av$ is an eigenvector of $AA^{\!\top}$ with the same eigenvalue $\lambda$.
-Moreover $\|Av\| = \sqrt{\lambda}\,\|v\|$.
+so $Xw$ is an eigenvector of $XX^{\!\top}$ with the same eigenvalue $\lambda$.
+Moreover $\|Xw\| = \sqrt{\lambda}\,\|w\|$.
 \end{theorem}
 
 \begin{proof}
 Start from the left-hand side and just insert brackets:
 \[
-  (AA^{\!\top})(Av) \;=\; A\,(A^{\!\top}\!A\,v) \;=\; A\,(Lv) \;=\; A(\lambda v) \;=\; \lambda\,(Av).
+  (XX^{\!\top})(Xw) \;=\; X\,(X^{\!\top}\!X\,w) \;=\; X\,(Lw) \;=\; X(\lambda w) \;=\; \lambda\,(Xw).
 \]
-That is the first claim. We also need $Av\neq 0$, otherwise it is not an
-eigenvector: if $Av=0$ then $Lv = A^{\!\top}(Av) = 0$, so $\lambda v = 0$, and since
-$v\neq0$ this forces $\lambda=0$, which we excluded.
+That is the first claim. We also need $Xw\neq 0$, otherwise it is not an
+eigenvector: if $Xw=0$ then $Lw = X^{\!\top}(Xw) = 0$, so $\lambda w = 0$, and since
+$w\neq0$ this forces $\lambda=0$, which we excluded.
 
-For the norm, take $v$ with $\|v\|=1$:
+For the norm, take $w$ with $\|w\|=1$:
 \[
-  \|Av\|^2 = (Av)^{\!\top}(Av) = v^{\!\top} A^{\!\top}\!A v = v^{\!\top} L v = v^{\!\top}(\lambda v) = \lambda .
+  \|Xw\|^2 = (Xw)^{\!\top}(Xw) = w^{\!\top} X^{\!\top}\!X w = w^{\!\top} L w = w^{\!\top}(\lambda w) = \lambda .
 \]
 \end{proof}
 
 \begin{gotcha}
 Theorem~\ref{thm:gram} gives eigen\emph{vectors}, not \emph{unit} eigenvectors.
-$\|Av\| = \sqrt{\lambda}$, which for face data is a huge number, not $1$. Every
+$\|Xw\| = \sqrt{\lambda}$, which for face data is a huge number, not $1$. Every
 column must be divided by its own norm afterwards. In our code:
 \begin{lstlisting}
 U = A * V;
@@ -293,16 +330,16 @@ end
 \end{lstlisting}
 If this loop is omitted, the eigenfaces are still the right \emph{directions}, so
 the recognition rates barely change -- nearest neighbour is affected only through
-the relative scaling between axes -- but $U^{\!\top} U \ne I$, the reconstruction
-formula $\mu + U_kU_k^{\!\top}(x-\mu)$ is no longer a projection, and the
+the relative scaling between axes -- but $\hat{V}_k^{\!\top}\hat{V}_k \ne I$, the reconstruction
+formula $\bar{x} + \hat{V}_k\hat{V}_k^{\!\top}(x-\bar{x})$ is no longer a projection, and the
 reconstruction-error identity of Theorem~\ref{thm:recon} fails. We verify
 orthonormality directly in section S12(a) of the script and measure
-$\|U^{\!\top} U - I\|_F = 9.060\times 10^{-14}$ for 20 ORL eigenfaces.
+$\|\hat{V}_k^{\!\top}\hat{V}_k - I\|_F = 9.060\times 10^{-14}$ for 20 ORL eigenfaces.
 \end{gotcha}
 
 \begin{gotcha}
 The trick only helps when $N \ll d$. It replaces a $d\times d$ eigenproblem
-(cost $O(d^3)$) with an $N\times N$ one (cost $O(N^3)$) plus the product $Av$.
+(cost $O(d^3)$) with an $N\times N$ one (cost $O(N^3)$) plus the product $Xw$.
 For Yale that is $1520^3\approx 3.5\times10^9$ instead of
 $32256^3\approx 3.4\times10^{13}$, about $10^4$ times cheaper. But if we ever had
 $N=100{,}000$ training images with $d=784$ (as in MNIST), the trick would be
@@ -311,15 +348,15 @@ conditional optimisation, not a universal improvement.
 \end{gotcha}
 
 \begin{corollary}\label{cor:rank}
-$A$ has at most $N$ non-zero singular values, and after mean subtraction at most
+$X$ has at most $N$ non-zero singular values, and after mean subtraction at most
 $N-1$. Hence PCA on $N$ images yields at most $N-1$ usable eigenfaces, no matter
 how large $d$ is.
 \end{corollary}
 \begin{proof}
-$\rank(A)\le\min(d,N)=N$. The columns of $A$ additionally satisfy one linear
-constraint, $\sum_j a_j = \sum_j (x_j-\mu) = N\mu - N\mu = 0$, so the columns are
+$\rank(X)\le\min(d,N)=N$. The columns of $X$ additionally satisfy one linear
+constraint, $\sum_i \bar{x}_i = \sum_i (x_i-\bar{x}) = N\bar{x} - N\bar{x} = 0$, so the columns are
 linearly dependent and the rank drops by at least one more, giving
-$\rank(A)\le N-1$.
+$\rank(X)\le N-1$.
 \end{proof}
 
 So for ORL-32 ($N=192$) the last eigenvalue is numerically zero and its
@@ -331,36 +368,36 @@ its own tiny norm and amplify it into a full-amplitude garbage image.
 
 \begin{theorem}[Reconstruction error]\label{thm:recon}
 Let $\lambda_1\ge\lambda_2\ge\cdots\ge\lambda_N$ be the eigenvalues of
-$C=\frac1N AA^{\!\top}$ with orthonormal eigenvectors $u_1,\dots$. Keeping the top
+$C=\frac1N XX^{\!\top}$ with orthonormal eigenvectors $V_1,\dots$. Keeping the top
 $k$, the mean squared reconstruction error is
 \[
-  E_k \;=\; \frac1N \sum_{j=1}^{N}\bigl\|a_j - U_kU_k^{\!\top} a_j\bigr\|^2
-        \;=\; \sum_{i=k+1}^{N}\lambda_i ,
+  E_k \;=\; \frac1N \sum_{i=1}^{N}\bigl\|\bar{x}_i - \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i\bigr\|^2
+        \;=\; \sum_{l=k+1}^{N}\lambda_l ,
 \]
 the sum of the eigenvalues we threw away.
 \end{theorem}
 
 \begin{proof}
-The eigenvectors $u_1,\dots,u_N$ of the symmetric matrix $C$ form an orthonormal
+The eigenvectors $V_1,\dots,V_N$ of the symmetric matrix $C$ form an orthonormal
 basis of the space spanned by the data, so we may expand each centred image as
-$a_j=\sum_{i} \alpha_{ij}u_i$ with $\alpha_{ij}=u_i^{\!\top} a_j$. Because the basis is
-orthonormal, Pythagoras gives $\|a_j\|^2=\sum_i \alpha_{ij}^2$.
+$\bar{x}_i=\sum_{i} \alpha_{il}V_l$ with $\alpha_{il}=V_l^{\!\top} \bar{x}_i$. Because the basis is
+orthonormal, Pythagoras gives $\|\bar{x}_i\|^2=\sum_i \alpha_{il}^2$.
 
-Keeping only the first $k$ basis vectors, $U_kU_k^{\!\top} a_j = \sum_{i\le k}\alpha_{ij}u_i$,
-so the residual is $a_j - U_kU_k^{\!\top} a_j = \sum_{i>k}\alpha_{ij}u_i$ and, by
+Keeping only the first $k$ basis vectors, $\hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i = \sum_{i\le k}\alpha_{il}V_l$,
+so the residual is $\bar{x}_i - \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i = \sum_{l>k}\alpha_{il}V_l$ and, by
 Pythagoras again,
 \[
-  \bigl\|a_j-U_kU_k^{\!\top} a_j\bigr\|^2 = \sum_{i>k}\alpha_{ij}^2 .
+  \bigl\|\bar{x}_i-\hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i\bigr\|^2 = \sum_{l>k}\alpha_{il}^2 .
 \]
-Average over $j$ and swap the two (finite) sums:
+Average over $i$ and swap the two (finite) sums:
 \[
-  E_k = \frac1N\sum_j\sum_{i>k}\alpha_{ij}^2
-      = \sum_{i>k}\frac1N\sum_j (u_i^{\!\top} a_j)^2
-      = \sum_{i>k} u_i^{\!\top} C u_i
-      = \sum_{i>k} \lambda_i ,
+  E_k = \frac1N\sum_i\sum_{l>k}\alpha_{il}^2
+      = \sum_{l>k}\frac1N\sum_i (V_l^{\!\top} \bar{x}_i)^2
+      = \sum_{l>k} V_l^{\!\top} C V_l
+      = \sum_{l>k} \lambda_l ,
 \]
-using $\frac1N\sum_j (u^{\!\top} a_j)^2 = u^{\!\top} Cu$ from View~1, and then
-$u_i^{\!\top} Cu_i=\lambda_i$.
+using $\frac1N\sum_i (u^{\!\top} \bar{x}_i)^2 = u^{\!\top} Cu$ from View~1, and then
+$V_l^{\!\top} CV_l=\lambda_l$.
 \end{proof}
 
 \begin{observation}
@@ -369,7 +406,7 @@ every digit printed:
 \begin{center}
 \begin{tabular}{rrr}
 \toprule
-$k$ & measured error & $\sum_{i>k}\lambda_i$ \\
+$k$ & measured error & $\sum_{l>k}\lambda_l$ \\
 \midrule
 10  & 5975095.1313 & 5975095.1313 \\
 50  & 2173731.2973 & 2173731.2973 \\
@@ -400,12 +437,12 @@ because the two-output form of \texttt{eig} returns eigenvalues as a diagonal
 \end{gotcha}
 
 \begin{gotcha}[Eigenvalues of $L$ are $N$ times the eigenvalues of $C$]
-We diagonalise $L=A^{\!\top}\!A$, but Theorem~\ref{thm:recon} is stated for
-$C=\frac1N AA^{\!\top}$. By Theorem~\ref{thm:gram} the non-zero eigenvalues of
-$A^{\!\top}\!A$ and $AA^{\!\top}$ are \emph{the same}; the factor of $N$ comes only from the
+We diagonalise $L=X^{\!\top}\!X$, but Theorem~\ref{thm:recon} is stated for
+$C=\frac1N XX^{\!\top}$. By Theorem~\ref{thm:gram} the non-zero eigenvalues of
+$X^{\!\top}\!X$ and $XX^{\!\top}$ are \emph{the same}; the factor of $N$ comes only from the
 $\frac1N$ in the definition of $C$. So
 \[
-  \lambda_i(C) = \frac{\lambda_i(L)}{N},
+  \lambda_l(C) = \frac{\lambda_l(L)}{N},
 \]
 which in code is the single line \texttt{lambda = eigvals / M;}. Drop it and the
 reconstruction table above is wrong by a factor of $192$ -- the recognition rates
@@ -416,28 +453,28 @@ are unaffected, which is exactly what makes this bug easy to miss.
 If $Cu=\lambda u$ then $C(-u)=\lambda(-u)$, so $-u$ is just as valid an
 eigenvector. Two correct programs can therefore return eigenfaces that look like
 photographic negatives of each other. Nothing downstream is affected: the
-projection $U_kU_k^{\!\top}$ and the distance $\|U_k^{\!\top} a - U_k^{\!\top} b\|$ are both
+projection $\hat{V}_k\hat{V}_k^{\!\top}$ and the distance $\|\hat{V}_k^{\!\top} a - \hat{V}_k^{\!\top} b\|$ are both
 unchanged by flipping a column's sign. But it means you must never compare two
-implementations with $\|u_1-u_2\|$; compare $|u_1^{\!\top} u_2|$ instead, which is what
+implementations with $\|V_1-V_2\|$; compare $|V_1^{\!\top} V_2|$ instead, which is what
 our section S12(b) does.
 \end{gotcha}
 
-\subsection{\texttt{eig} on \texorpdfstring{$A^{\!\top}\!A$}{A'A} versus \texttt{svd} of \texorpdfstring{$A$}{A}}
+\subsection{\texttt{eig} on \texorpdfstring{$X^{\!\top}\!X$}{A'A} versus \texttt{svd} of \texorpdfstring{$X$}{A}}
 \label{sec:eigvssvd}
 
 Both routes give the same subspace, but they are not equally accurate. The
-singular values of $A$ and the eigenvalues of $L=A^{\!\top}\!A$ are related by
-$\lambda_i = \sigma_i^2$. The \emph{condition number} -- the ratio of largest to
+singular values of $X$ and the eigenvalues of $L=X^{\!\top}\!X$ are related by
+$\lambda_l = \sigma_l^2$. The \emph{condition number} -- the ratio of largest to
 smallest, which controls how much round-off gets amplified -- therefore satisfies
 \[
   \kappa(L) \;=\; \frac{\lambda_1}{\lambda_N} \;=\; \frac{\sigma_1^2}{\sigma_N^2}
-  \;=\; \kappa(A)^2 .
+  \;=\; \kappa(X)^2 .
 \]
-\textbf{Forming $A^{\!\top}\!A$ squares the condition number.} In rough terms, if $A$
-is accurate to 16 digits, $L$ is accurate to 8. Computing the SVD of $A$ directly
+\textbf{Forming $X^{\!\top}\!X$ squares the condition number.} In rough terms, if $X$
+is accurate to 16 digits, $L$ is accurate to 8. Computing the SVD of $X$ directly
 never forms $L$ and so avoids the squaring.
 
-We kept the $L=A^{\!\top}\!A$ route because it is what HW3 used and because it is much
+We kept the $L=X^{\!\top}\!X$ route because it is what HW3 used and because it is much
 cheaper, but we verify against the SVD in section S12(b). The first ten components
 agree to all printed digits:
 \begin{lstlisting}
@@ -446,8 +483,8 @@ agree to all printed digits:
     min over those 10 = 1.00000000 (1.0 means identical direction)
 \end{lstlisting}
 The agreement is perfect for the \emph{leading} components because those have large
-$\sigma_i$ and are well separated. It is the \emph{trailing} components, where
-$\sigma_i$ is tiny, that the squaring damages -- and those are exactly the ones
+$\sigma_l$ and are well separated. It is the \emph{trailing} components, where
+$\sigma_l$ is tiny, that the squaring damages -- and those are exactly the ones
 Fisherfaces will be forced to use in Part~III, which is why this matters later.
 
 \section{Why the top 3 eigenfaces encode lighting: the Lambertian argument}
@@ -581,13 +618,13 @@ $w_{PCA}$ they sit on top of each other.}
 
 \subsection{Setting up the criterion}
 
-Let class $i$ have $n_i$ training points, mean $\mu_i$, and let $\mu$ be the
+Let class $j$ have $n_j$ training points, mean $\mu_j$, and let $\bar{x}$ be the
 overall mean. Define the \textbf{within-class scatter} and \textbf{between-class
 scatter}
 \[
-  \Sw \;=\; \sum_{i=1}^{c}\;\sum_{x \in \text{class } i}(x-\mu_i)(x-\mu_i)^{\!\top},
+  \Sw \;=\; \sum_{j=1}^{c}\;\sum_{x \in \text{class } j}(x-\mu_j)(x-\mu_j)^{\!\top},
   \qquad
-  \Sb \;=\; \sum_{i=1}^{c} n_i\,(\mu_i-\mu)(\mu_i-\mu)^{\!\top}.
+  \Sb \;=\; \sum_{j=1}^{c} n_j\,(\mu_j-\bar{x})(\mu_j-\bar{x})^{\!\top}.
 \]
 Both are sums of outer products, hence symmetric and positive semi-definite.
 
@@ -643,12 +680,12 @@ with the largest $\lambda$, exactly as in PCA.
 \subsection{The two-class closed form}\label{sec:twoclass}
 
 With $c=2$ we can solve it by hand. First simplify $\Sb$. The overall mean is
-$\mu=\frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}$, so
+$\bar{x}=\frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}$, so
 \[
-  \mu_1-\mu = \mu_1 - \frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}
+  \mu_1-\bar{x} = \mu_1 - \frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}
             = \frac{n_2(\mu_1-\mu_2)}{n_1+n_2},
   \qquad
-  \mu_2-\mu = \frac{n_1(\mu_2-\mu_1)}{n_1+n_2}.
+  \mu_2-\bar{x} = \frac{n_1(\mu_2-\mu_1)}{n_1+n_2}.
 \]
 Writing $\delta := \mu_1-\mu_2$ and $n:=n_1+n_2$,
 \[
@@ -730,7 +767,7 @@ function, which is in base MATLAB:
 
 With $c$ classes we also define the \textbf{total scatter}
 \[
-  \St \;=\; \sum_{j=1}^{N}(x_j-\mu)(x_j-\mu)^{\!\top} .
+  \St \;=\; \sum_{i=1}^{N}(x_i-\bar{x})(x_i-\bar{x})^{\!\top} .
 \]
 Note $\St = N\cdot C$: total scatter is total covariance without the $\frac1N$.
 
@@ -739,25 +776,25 @@ $\St = \Sb + \Sw$.
 \end{theorem}
 
 \begin{proof}
-Take any $x$ in class $i$ and insert $\mu_i$ twice:
+Take any $x$ in class $j$ and insert $\mu_j$ twice:
 \[
-  x-\mu = (x-\mu_i) + (\mu_i-\mu).
+  x-\bar{x} = (x-\mu_j) + (\mu_j-\bar{x}).
 \]
-Write $u=x-\mu_i$ and $v=\mu_i-\mu$. Then
+Write $u=x-\mu_j$ and $v=\mu_j-\bar{x}$. Then
 \[
-  (x-\mu)(x-\mu)^{\!\top} = (u+v)(u+v)^{\!\top} = uu^{\!\top} + uv^{\!\top} + vu^{\!\top} + vv^{\!\top}.
+  (x-\bar{x})(x-\bar{x})^{\!\top} = (u+v)(u+v)^{\!\top} = uu^{\!\top} + uv^{\!\top} + vu^{\!\top} + vv^{\!\top}.
 \]
-Sum over the $n_i$ points of class $i$. The vector $v$ does not depend on which
+Sum over the $n_j$ points of class $j$. The vector $v$ does not depend on which
 point we are at, so it factors out of the cross terms:
 \[
-  \sum_{x\in i} uv^{\!\top} = \Bigl(\sum_{x\in i}(x-\mu_i)\Bigr)v^{\!\top} = 0\cdot v^{\!\top} = 0,
+  \sum_{x\in j} uv^{\!\top} = \Bigl(\sum_{x\in j}(x-\mu_j)\Bigr)v^{\!\top} = 0\cdot v^{\!\top} = 0,
 \]
 because the deviations from a class's own mean sum to zero \emph{by the definition
 of the mean}. The same kills $\sum vu^{\!\top}$. What is left is
 \[
-  \sum_{x\in i}(x-\mu)(x-\mu)^{\!\top} = \underbrace{\sum_{x\in i}(x-\mu_i)(x-\mu_i)^{\!\top}}_{\text{class $i$'s contribution to }\Sw} + \underbrace{n_i (\mu_i-\mu)(\mu_i-\mu)^{\!\top}}_{\text{class $i$'s contribution to }\Sb}.
+  \sum_{x\in j}(x-\bar{x})(x-\bar{x})^{\!\top} = \underbrace{\sum_{x\in j}(x-\mu_j)(x-\mu_j)^{\!\top}}_{\text{class $j$'s contribution to }\Sw} + \underbrace{n_j (\mu_j-\bar{x})(\mu_j-\bar{x})^{\!\top}}_{\text{class $j$'s contribution to }\Sb}.
 \]
-Summing over $i=1,\dots,c$ gives $\St=\Sw+\Sb$.
+Summing over $j=1,\dots,c$ gives $\St=\Sw+\Sb$.
 \end{proof}
 
 \begin{observation}
@@ -768,7 +805,7 @@ info.resST = norm(St - (Sb + Sw), 'fro') / norm(St, 'fro');
 \end{lstlisting}
 Across all five dataset configurations the measured relative residual lies between
 $2.7\times10^{-16}$ and $8.6\times10^{-16}$, i.e.\ machine precision. If a class
-mean or a count $n_i$ were computed wrongly, this number would jump immediately.
+mean or a count $n_j$ were computed wrongly, this number would jump immediately.
 \end{observation}
 
 \subsection{The multi-class criterion}
@@ -783,7 +820,7 @@ The standard choice is the ratio of determinants,
 The determinant is used because it is the product of the eigenvalues, i.e.\ the
 \emph{volume} the scattered points occupy; so $J$ compares between-class volume to
 within-class volume. The maximiser is the matrix whose columns are the $k$
-generalised eigenvectors $\Sb w_i = \lambda_i \Sw w_i$ with the largest
+generalised eigenvectors $\Sb w_l = \lambda_l \Sw w_l$ with the largest
 $\lambda_i$ -- the same equation as the two-class case.
 
 \begin{theorem}[The answer is a subspace, not a basis]\label{thm:invariance}
@@ -807,13 +844,13 @@ different from the paper's'' is not evidence of a bug.
 $\rank(\Sb)\le c-1$.
 \end{theorem}
 \begin{proof}
-$\Sb=\sum_{i=1}^c n_i(\mu_i-\mu)(\mu_i-\mu)^{\!\top}$ is a sum of $c$ rank-one matrices,
+$\Sb=\sum_{j=1}^c n_j(\mu_j-\bar{x})(\mu_j-\bar{x})^{\!\top}$ is a sum of $c$ rank-one matrices,
 so immediately $\rank(\Sb)\le c$. Its column space is spanned by the $c$ vectors
-$\mu_i-\mu$. But those vectors satisfy one linear relation:
+$\mu_j-\bar{x}$. But those vectors satisfy one linear relation:
 \[
-  \sum_{i=1}^{c} n_i(\mu_i-\mu) = \sum_i n_i\mu_i - \Bigl(\sum_i n_i\Bigr)\mu = N\mu - N\mu = 0,
+  \sum_{j=1}^{c} n_j(\mu_j-\bar{x}) = \sum_j n_j\mu_j - \Bigl(\sum_j n_j\Bigr)\bar{x} = N\bar{x} - N\bar{x} = 0,
 \]
-using $\sum_i n_i\mu_i = \sum_j x_j = N\mu$. A set of $c$ vectors with a non-trivial
+using $\sum_j n_j\mu_j = \sum_i x_i = N\bar{x}$. A set of $c$ vectors with a non-trivial
 linear dependence spans a space of dimension at most $c-1$. Hence
 $\rank(\Sb)\le c-1$.
 \end{proof}
@@ -840,19 +877,19 @@ $\rank(\Sw)\le N-c$.
 \end{theorem}
 \begin{proof}
 Let $A_W$ be the $d\times N$ matrix whose columns are the within-class-centred
-images $x_j-\mu_{\text{class}(j)}$. Then $\Sw=A_WA_W^{\!\top}$, so
+images $x_j-\mu_{\text{class}(i)}$. Then $\Sw=A_WA_W^{\!\top}$, so
 $\rank(\Sw)=\rank(A_W)$.
 
-Group the columns by class. Within class $i$, the $n_i$ columns sum to zero (again
-by the definition of $\mu_i$), so those $n_i$ columns span a space of dimension at
-most $n_i-1$. Summing over classes,
+Group the columns by class. Within class $j$, the $n_j$ columns sum to zero (again
+by the definition of $\mu_j$), so those $n_j$ columns span a space of dimension at
+most $n_j-1$. Summing over classes,
 \[
-  \rank(A_W)\;\le\;\sum_{i=1}^{c}(n_i-1) \;=\; \Bigl(\sum_i n_i\Bigr) - c \;=\; N-c. \qedhere
+  \rank(A_W)\;\le\;\sum_{j=1}^{c}(n_j-1) \;=\; \Bigl(\sum_j n_j\Bigr) - c \;=\; N-c. \qedhere
 \]
 \end{proof}
 
 \paragraph{The degrees-of-freedom reading -- remember this one.}
-The proof says each class donates only $n_i-1$ directions to $\Sw$. So:
+The proof says each class donates only $n_j-1$ directions to $\Sw$. So:
 \begin{itemize}[nosep]
 \item ORL with $6$ images per person: each class contributes $\mathbf{5}$ directions.
 \item Yale with $40$ images per person: each class contributes $\mathbf{39}$.
@@ -951,7 +988,7 @@ The two projections compose into a single one:
   \qquad\text{i.e.}\qquad
   W_{\text{opt}} \;=\; W_{\text{pca}}\,W_{\text{fld}} \;\in\; \R^{d\times(c-1)}.
 \]
-To classify an image $x$ we compute $W_{\text{opt}}^{\!\top}(x-\mu)\in\R^{c-1}$ and find
+To classify an image $x$ we compute $W_{\text{opt}}^{\!\top}(x-\bar{x})\in\R^{c-1}$ and find
 its nearest training neighbour. The columns of $W_{\text{opt}}$, viewed as images,
 are the \textbf{Fisherfaces}.
 
@@ -1116,14 +1153,14 @@ visible and defensible; the packaged version is kept only as the check.
 \subsection{Fisherfaces are not orthogonal}
 
 \begin{theorem}
-The generalised eigenvectors satisfy $w_i^{\!\top}\Sw w_j = 0$ for $\lambda_i\neq\lambda_j$.
-In general $w_i^{\!\top} w_j \neq 0$.
+The generalised eigenvectors satisfy $w_l^{\!\top}\Sw w_{l'} = 0$ for $\lambda_l\neq\lambda_{l'}$.
+In general $w_l^{\!\top} w_{l'} \neq 0$.
 \end{theorem}
 \begin{proof}
 The whitened eigenvectors $z_i$ of the symmetric matrix $M$ are orthonormal:
-$z_i^{\!\top} z_j=\delta_{ij}$. Since $w_i = R^{-1}z_i$, i.e.\ $z_i = Rw_i$,
+$z_l^{\!\top} z_{l'}=\delta_{ll'}$. Since $w_i = R^{-1}z_i$, i.e.\ $z_i = Rw_i$,
 \[
-  \delta_{ij} = z_i^{\!\top} z_j = (Rw_i)^{\!\top}(Rw_j) = w_i^{\!\top} R^{\!\top} R w_j = w_i^{\!\top}\Sw w_j .
+  \delta_{ll'} = z_l^{\!\top} z_j = (Rw_i)^{\!\top}(Rw_j) = w_i^{\!\top} R^{\!\top} R w_j = w_l^{\!\top}\Sw w_{l'} .
 \]
 So they are orthonormal with respect to the inner product defined by $\Sw$, not the
 Euclidean one. Euclidean orthogonality would require $R^{\!\top} R=I$, i.e.\ $\Sw=I$,
@@ -1171,7 +1208,7 @@ not.}
   person with and without glasses). We used nearest neighbour to match both the
   paper and our HW3 baseline.
 \item[Mahalanobis distance in the projected space.]
-  Weight each discriminant axis by $1/\sqrt{\lambda_i}$ rather than treating all
+  Weight each discriminant axis by $1/\sqrt{\lambda_l}$ rather than treating all
   axes equally. Reasonable, but it re-amplifies the poorly estimated small-$\lambda$
   directions, which is the very problem we are trying to avoid.
 \end{description}
@@ -1455,13 +1492,13 @@ On ORL-32 Fisherfaces gets $90.6\%$ against Eigenfaces' $95.3\%$, and on ORL-40 
 is worse again, $84.4\%$ against $93.8\%$. We did not tune this away, because the
 explanation is exactly the theory in Theorem~\ref{thm:rankSw}.
 
-ORL has only $n_i=6$ images per person, so each class contributes $n_i-1=5$
+ORL has only $n_j=6$ images per person, so each class contributes $n_j-1=5$
 directions to $\Sw$. We are estimating a $160\times160$ within-class scatter matrix
 from $192-32=160$ degrees of freedom -- the number of parameters we need is of order
 $160^2/2 = 12800$, and we have $160$ samples' worth of information. The estimate is
 hopeless, and LDA then \emph{trusts} it by inverting it.
 
-Yale has $n_i=40$, i.e.\ $39$ directions per class, and there Fisherfaces wins
+Yale has $n_j=40$, i.e.\ $39$ directions per class, and there Fisherfaces wins
 comfortably. The contrast between the two databases is not a contradiction; it is
 the small-sample-size effect, measured.
 
@@ -1599,7 +1636,7 @@ the accuracy drop.}
 \centering
 \begin{tabular}{rrrrrr}
 \toprule
-$n_i$ & $N$ & $N-c$ & Correlation & Eigenfaces (best $k$) & \textbf{Fisherfaces} \\
+$n_j$ & $N$ & $N-c$ & Correlation & Eigenfaces (best $k$) & \textbf{Fisherfaces} \\
 \midrule
  2 &   76 &   38 & 26.6 & 19.9 & \textbf{43.0} \\
  3 &  114 &   76 & 29.9 & 22.2 & \textbf{51.5} \\
@@ -1615,17 +1652,17 @@ $n_i$ & $N$ & $N-c$ & Correlation & Eigenfaces (best $k$) & \textbf{Fisherfaces}
 \end{table}
 
 \begin{observation}
-Fisherfaces beats Eigenfaces at \emph{every} training-set size, including $n_i=2$
+Fisherfaces beats Eigenfaces at \emph{every} training-set size, including $n_j=2$
 where $\Sw$ gets only one degree of freedom per class ($43.0\%$ vs $19.9\%$). We
-had half-expected Fisherfaces to lose at the smallest $n_i$, as it does on ORL. It
+had half-expected Fisherfaces to lose at the smallest $n_j$, as it does on ORL. It
 does not, and the reason is instructive: on Yale the nuisance (illumination) is so
 dominant that even a badly estimated $\Sw$ points roughly in the right direction,
 and suppressing it approximately is still far better than not suppressing it at
 all. On ORL there is no such dominant nuisance to suppress, so a noisy $\Sw$ buys
 nothing and the inversion only adds variance.
 
-The relative advantage does shrink as data grows -- $2.16\times$ at $n_i=2$ down to
-$1.40\times$ at $n_i=40$ -- which is the expected convergence: with enough data,
+The relative advantage does shrink as data grows -- $2.16\times$ at $n_j=2$ down to
+$1.40\times$ at $n_j=40$ -- which is the expected convergence: with enough data,
 PCA's leading components eventually separate identity from lighting too.
 \end{observation}
 
@@ -1684,7 +1721,7 @@ discarding them hurts here and helps on Yale.}
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.30\textwidth]{figs/s11_orl_meanface.png}
-\caption{S11: the ORL mean face $\mu$, subtracted from every image before PCA. It
+\caption{S11: the ORL mean face $\bar{x}$, subtracted from every image before PCA. It
 is recognisably a face because it averages what all the subjects have in common;
 PCA then describes how individuals deviate from it.}
 \label{fig:meanface}
@@ -1742,7 +1779,7 @@ LDA error vs Bayes error            & S1 & $1.70\%$ vs $2.28\%$ theoretical \\
 \item \textbf{It is a claim about nuisance structure, not about LDA being better.}
   On ORL, where variation is pose and expression and only six images per person are
   available, Fisherfaces \emph{loses} to Eigenfaces. The deciding quantity is the
-  per-class degrees of freedom $n_i-1$ available to estimate $\Sw$.
+  per-class degrees of freedom $n_j-1$ available to estimate $\Sw$.
 \item \textbf{The $m=N-c$ prescription is the weakest part of the recipe.} It is
   the largest $m$ making $\Sw$ invertible, but it is the \emph{worst-conditioned}
   such choice, and on both databases a smaller $m$ does better ($95.3$ vs $90.6$ on
@@ -1774,9 +1811,9 @@ Without centring, the first component points at the mean face itself -- the
 direction in which the raw vectors are largest -- which describes what faces have
 in common rather than how they differ. (Section~\ref{sec:centre})
 
-\item[Why does the $L=A^{\!\top}\!A$ trick work?]
-If $Lv=\lambda v$ then $AA^{\!\top}(Av)=A(A^{\!\top}\!Av)=\lambda(Av)$, so $Av$ is an
-eigenvector of $AA^{\!\top}$ with the same eigenvalue. We get the eigenvectors of a
+\item[Why does the $L=X^{\!\top}\!X$ trick work?]
+If $Lw=\lambda w$ then $XX^{\!\top}(Xw)=X(X^{\!\top}\!Xw)=\lambda(Xw)$, so $Xw$ is an
+eigenvector of $XX^{\!\top}$ with the same eigenvalue. We get the eigenvectors of a
 $32256\times32256$ matrix from a $1520\times1520$ one. (Theorem~\ref{thm:gram})
 
 \item[When is that trick a bad idea?]
@@ -1784,8 +1821,8 @@ When $N > d$. It trades an $O(d^3)$ problem for an $O(N^3)$ one, so it only help
 while $N\ll d$. On MNIST ($d=784$, $N=60000$) it would be far slower than forming
 the covariance directly.
 
-\item[Why must you renormalise $Av$?]
-$\|Av\|=\sqrt{\lambda}$, not $1$. Without renormalising, $U^{\!\top} U\ne I$, the
+\item[Why must you renormalise $Xw$?]
+$\|Xw\|=\sqrt{\lambda}$, not $1$. Without renormalising, $\hat{V}_k^{\!\top}\hat{V}_k\ne I$, the
 reconstruction formula stops being an orthogonal projection, and
 Theorem~\ref{thm:recon} fails.
 
@@ -1828,19 +1865,19 @@ once we classify we must pick a convention. We normalise each Fisherface to unit
 norm and say so.
 
 \item[Prove $\St=\Sb+\Sw$.]
-Split $x-\mu=(x-\mu_i)+(\mu_i-\mu)$, expand the outer product, and note the cross
-terms vanish because $\sum_{x\in i}(x-\mu_i)=0$ by definition of the class mean.
+Split $x-\bar{x}=(x-\mu_j)+(\mu_j-\bar{x})$, expand the outer product, and note the cross
+terms vanish because $\sum_{x\in j}(x-\mu_j)=0$ by definition of the class mean.
 (Theorem~\ref{thm:decomp})
 
 \item[Why at most $c-1$ Fisherfaces?]
-$\Sb$ is spanned by the $c$ vectors $\mu_i-\mu$, which obey the one relation
-$\sum_i n_i(\mu_i-\mu)=0$, so $\rank(\Sb)\le c-1$. Any $w$ in the null space of
+$\Sb$ is spanned by the $c$ vectors $\mu_j-\bar{x}$, which obey the one relation
+$\sum_j n_j(\mu_j-\bar{x})=0$, so $\rank(\Sb)\le c-1$. Any $w$ in the null space of
 $\Sb$ gives $\lambda=0$. (Theorem~\ref{thm:rankSb})
 
 \item[Why is $\rank(\Sw)\le N-c$?]
 $\Sw=A_WA_W^{\!\top}$ where $A_W$ holds the within-class-centred images. Each class's
-$n_i$ columns sum to zero, so contribute at most $n_i-1$ independent directions;
-summing, $\sum_i(n_i-1)=N-c$. (Theorem~\ref{thm:rankSw})
+$n_j$ columns sum to zero, so contribute at most $n_j-1$ independent directions;
+summing, $\sum_j(n_j-1)=N-c$. (Theorem~\ref{thm:rankSw})
 
 \item[Is that bound always attained?]
 No, it is an upper bound. We measured $1481$ instead of $1482$ on Yale and traced
@@ -1848,7 +1885,7 @@ it to a duplicated image file, which is an exact linear dependency. After removi
 it the bound is met exactly.
 
 \item[Are Fisherfaces orthogonal?]
-Not in the Euclidean sense. They satisfy $w_i^{\!\top}\Sw w_j=\delta_{ij}$, i.e.\ they
+Not in the Euclidean sense. They satisfy $w_l^{\!\top}\Sw w_{l'}=\delta_{ij}$, i.e.\ they
 are orthonormal in the inner product defined by $\Sw$. We measured the Euclidean
 Gram matrix to have about half its energy off the diagonal, while $W^{\!\top}\Sw W$ is
 diagonal to $10^{-13}$. Eigenfaces \emph{are} orthonormal; Fisherfaces are not.
@@ -1936,7 +1973,7 @@ value to zero and silently destroy the data.
 recognition.
 
 \item[Why divide the eigenvalues by $M$?]
-We diagonalise $L=A^{\!\top}\!A$ but the theory is about $C=\frac1N AA^{\!\top}$. Their
+We diagonalise $L=X^{\!\top}\!X$ but the theory is about $C=\frac1N XX^{\!\top}$. Their
 non-zero eigenvalues are equal, so the only difference is the $\frac1N$. Without
 the division the reconstruction identity is wrong by a factor of $N$ -- and the
 recognition rates are unaffected, which is what makes the bug hard to spot.
