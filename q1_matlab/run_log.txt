@@ -1,0 +1,19 @@
+
+=== ORL ===
+trainImages: 10304 x 192, testImages: 10304 x 128
+ORL (d) rates @ ks_d: 17.2 44.5 71.1 75.8 93.0 92.2 92.2 94.5 95.3 94.5 93.8 93.8 93.0 
+ORL (g) all      @ ks_g: 17.2 44.5 71.1 75.8 93.0 92.2 92.2 94.5 95.3 94.5 93.8 94.5 93.8 93.8 93.0 
+ORL (g) skip-top3 @ ks_g: NaN NaN NaN 13.3 70.3 80.5 85.2 87.5 87.5 85.2 85.2 84.4 82.8 82.0 82.8 
+
+Part (i) check (ORL): measured error vs sum of discarded eigenvalues
+  k =  10: measured = 5975095.1313, sum(lambda_{k+1..}) = 5975095.1313
+  k =  50: measured = 2173731.2973, sum(lambda_{k+1..}) = 2173731.2973
+  k = 100: measured = 894177.2765, sum(lambda_{k+1..}) = 894177.2765
+
+=== Yale ===
+trainImages: 32256 x 1520, testImages: 32256 x 895
+Yale (e/f) rates @ ks_d: 2.9 3.2 3.1 6.7 16.8 20.8 24.2 28.0 30.8 32.3 33.7 33.9 34.2 
+Yale (g) all      @ ks_g: 2.9 3.2 3.1 6.7 16.8 20.8 24.2 28.0 30.8 31.7 32.1 32.3 33.7 33.9 34.2 
+Yale (g) skip-top3 @ ks_g: NaN NaN NaN 5.4 20.2 31.8 38.1 43.4 49.7 53.0 53.6 54.9 56.3 58.1 58.8 
+
+All figures written to figs/

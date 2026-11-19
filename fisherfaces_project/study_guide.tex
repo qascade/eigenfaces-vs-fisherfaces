@@ -1,0 +1,1981 @@
+\documentclass[11pt]{article}
+
+\usepackage[top=0.9in,bottom=1.0in,left=1.0in,right=1.0in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+\titlespacing*{\section}{0pt}{14pt}{6pt}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+
+\theoremstyle{definition}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+
+\theoremstyle{remark}
+\newtheorem*{gotcha}{Gotcha}
+\newtheorem*{observation}{Empirical observation}
+
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  framesep=4pt,
+  backgroundcolor=\color{gray!8},
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\newcommand{\Sw}{S_W}
+\newcommand{\Sb}{S_B}
+\newcommand{\St}{S_T}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\rank}{\operatorname{rank}}
+
+\title{\textbf{Eigenfaces vs.\ Fisherfaces}\\[4pt]
+\large A study guide with full derivations, code notes and measured results}
+\author{Shubh Karman Singh (26M0843) \and Saumya Bajpai (26D0366)}
+\date{CS 740 Project \\ \today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+This guide covers the paper P.~N.~Belhumeur, J.~P.~Hespanha and D.~J.~Kriegman,
+\emph{``Eigenfaces vs.\ Fisherfaces: Recognition Using Class Specific Linear
+Projection''}, IEEE TPAMI 19(7), 1997. It is written to be read from a standing
+start: every derivation is done line by line, and every claim about the code is
+tied to a number actually produced by our MATLAB script
+\texttt{fisherfaces\_project.m}. Every experimental figure quoted here comes from
+\texttt{run\_log.txt} in the same directory.
+\end{abstract}
+
+\tableofcontents
+
+\section{Notation used everywhere in this document}
+
+One image is turned into one long column vector by stacking its pixels. Everything
+below uses the symbols in Table~\ref{tab:notation}, and no symbol ever changes
+meaning.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{cll}
+\toprule
+Symbol & Meaning & Value in our experiments \\
+\midrule
+$d$        & number of pixels in one image (the dimension) & ORL $10304$, Yale $32256$ \\
+$N$        & number of training images in total            & ORL $192$, Yale $1520$ \\
+$c$        & number of classes (= number of people)        & ORL $32$ or $40$, Yale $38$ \\
+$n_i$      & number of training images of person $i$       & ORL $6$, Yale $40$ \\
+$x$        & one image, as a column vector in $\R^d$       & \\
+$\mu$      & mean of all training images (``mean face'')   & \\
+$\mu_i$    & mean of the images of class $i$               & \\
+$A$        & $d\times N$ matrix of mean-subtracted images  & $A = X - \mu$ \\
+$C$        & total covariance matrix $\tfrac{1}{N}AA^{\!\top}$ & $d\times d$ \\
+$\St,\Sb,\Sw$ & total, between-class, within-class scatter & $d\times d$ \\
+$k$        & number of eigenfaces kept                     & swept $1\ldots170$ \\
+$m$        & number of PCA dimensions kept \emph{before} LDA & paper uses $N-c$ \\
+$U$        & matrix whose columns are eigenfaces           & $d\times k$ \\
+$W$        & matrix whose columns are Fisherfaces          & $d\times(c-1)$ \\
+\bottomrule
+\end{tabular}
+\caption{Notation. ``Scatter'' means a sum of outer products with \emph{no}
+division by $N$; ``covariance'' means the same thing divided by $N$. The
+distinction matters in Section~\ref{sec:scaling}.}
+\label{tab:notation}
+\end{table}
+
+\paragraph{Why stacking pixels into a vector is allowed.}
+A $112\times 92$ image has $10304$ numbers in it. Writing them as a $10304$-long
+column simply chooses an order for those numbers. Every method here (PCA, LDA,
+nearest neighbour) only ever uses sums, differences and inner products of whole
+images, and all of those are unchanged by reordering the entries, as long as we use
+the \emph{same} order for every image. We lose the knowledge that pixel $(5,7)$ is
+next to pixel $(5,8)$ -- these methods genuinely do not know the image is 2-D --
+but nothing becomes incorrect.
+
+\medskip
+In MATLAB the stacking is \texttt{im(:)}, which reads the matrix \textbf{column by
+column} (``column-major'' order). The inverse is
+\texttt{reshape(v, height, width)}. The two must always be used as a matched pair;
+reshaping with the width and height swapped gives a scrambled image.
+
+\part{Eigenfaces: revision, derivations and gotchas}
+
+\section{PCA from first principles}
+
+We have $N$ images $x_1,\dots,x_N$ in $\R^d$. We want to replace each one by a
+short list of $k \ll d$ numbers, losing as little as possible. PCA answers this,
+and the same answer drops out of three different starting questions.
+
+\subsection{Step 0: subtract the mean}\label{sec:centre}
+
+Let
+\[
+  \mu \;=\; \frac{1}{N}\sum_{j=1}^{N} x_j ,
+  \qquad
+  a_j \;=\; x_j - \mu ,
+  \qquad
+  A \;=\; [\,a_1 \; a_2 \; \cdots \; a_N\,] \in \R^{d\times N}.
+\]
+Subtracting the mean is not cosmetic. PCA looks for directions of large
+\emph{variance}, i.e.\ large spread \emph{about the centre}. If we skipped this
+step the first ``principal component'' would simply point at the mean face, because
+that is the direction in which the raw vectors are biggest, and it would tell us
+nothing about how faces differ from one another.
+
+\subsection{View 1: maximise the variance of the projection}
+
+Project every centred image onto a unit vector $u$ (so $u^{\!\top} u = 1$). Image
+$j$ becomes the single number $u^{\!\top} a_j$. The mean of these numbers is
+\[
+  \frac{1}{N}\sum_j u^{\!\top} a_j
+  \;=\; u^{\!\top}\!\left(\frac{1}{N}\sum_j a_j\right) \;=\; u^{\!\top} 0 \;=\; 0,
+\]
+because the $a_j$ are already centred. So their variance is just the mean of their
+squares:
+\[
+  \operatorname{Var}(u)
+  \;=\; \frac{1}{N}\sum_{j=1}^{N}\bigl(u^{\!\top} a_j\bigr)^2 .
+\]
+Now rewrite that sum as a matrix product. Since $u^{\!\top} a_j$ is a scalar, it
+equals its own transpose, so $(u^{\!\top} a_j)^2 = (u^{\!\top} a_j)(a_j^{\!\top} u)$. Therefore
+\[
+  \operatorname{Var}(u)
+  = \frac{1}{N}\sum_j u^{\!\top} a_j a_j^{\!\top} u
+  = u^{\!\top}\!\left(\frac{1}{N}\sum_j a_j a_j^{\!\top}\right)\! u
+  = u^{\!\top} C u,
+  \qquad
+  C \;:=\; \frac{1}{N} A A^{\!\top}.
+\]
+$C$ is the $d\times d$ covariance matrix. It is symmetric, because
+$(a_ja_j^{\!\top})^{\!\top} = a_ja_j^{\!\top}$, and positive semi-definite, because
+$u^{\!\top} C u$ is an average of squares and so is never negative.
+
+So the question is: maximise $u^{\!\top} C u$ subject to $u^{\!\top} u = 1$.
+
+\paragraph{Solving it with a Lagrange multiplier.}
+Build
+\[
+  \mathcal{L}(u,\lambda) \;=\; u^{\!\top} C u \;-\; \lambda\,(u^{\!\top} u - 1).
+\]
+We need the derivative of a quadratic form. For a \emph{symmetric} matrix $M$,
+\[
+  \frac{\partial}{\partial u}\bigl(u^{\!\top} M u\bigr) \;=\; 2Mu .
+\]
+(Quick check in one line: $u^{\!\top} M u=\sum_{p,q}M_{pq}u_pu_q$; differentiating
+with respect to $u_r$ picks up $\sum_q M_{rq}u_q$ from the $p=r$ terms and
+$\sum_p M_{pr}u_p$ from the $q=r$ terms, and these are equal because $M$ is
+symmetric, giving $2(Mu)_r$.)
+
+Applying it to both pieces, using $C$ symmetric and the identity matrix symmetric,
+\[
+  \frac{\partial \mathcal{L}}{\partial u} \;=\; 2Cu - 2\lambda u \;=\; 0
+  \qquad\Longrightarrow\qquad
+  \boxed{\,C u = \lambda u\,}.
+\]
+So the optimal direction is an \textbf{eigenvector} of $C$. Which one? Multiply
+$Cu=\lambda u$ on the left by $u^{\!\top}$:
+\[
+  u^{\!\top} C u \;=\; \lambda\, u^{\!\top} u \;=\; \lambda .
+\]
+The quantity we were maximising \emph{equals} the eigenvalue. So the best direction
+is the eigenvector with the \textbf{largest} eigenvalue, the second-best (among
+directions orthogonal to the first) is the next largest, and so on. The eigenvalue
+$\lambda_i$ literally is the variance captured by eigenvector $u_i$.
+
+\subsection{View 2: minimise the reconstruction error}
+
+Suppose instead we ask for the $k$-dimensional subspace that reconstructs the data
+best. Let $U_k=[u_1\cdots u_k]$ have orthonormal columns, so $U_k^{\!\top} U_k=I_k$.
+The best approximation of $a$ inside that subspace is the orthogonal projection
+$U_kU_k^{\!\top} a$, and the error is
+\[
+  E \;=\; \frac{1}{N}\sum_{j=1}^N \bigl\| a_j - U_kU_k^{\!\top} a_j \bigr\|^2 .
+\]
+Write $P=U_kU_k^{\!\top}$. Then $P$ is symmetric and $P^2=U_k(U_k^{\!\top} U_k)U_k^{\!\top}=U_kU_k^{\!\top}=P$,
+i.e.\ $P$ is a projection. Expanding one term,
+\[
+  \|a-Pa\|^2 = (a-Pa)^{\!\top}(a-Pa) = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} P^{\!\top} Pa
+             = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} Pa
+             = \|a\|^2 - a^{\!\top} Pa ,
+\]
+where we used $P^{\!\top} P = PP = P$. Averaging over $j$,
+\[
+  E = \underbrace{\frac1N\sum_j\|a_j\|^2}_{\text{fixed, does not depend on }U_k}
+      \;-\; \frac1N\sum_j a_j^{\!\top} U_kU_k^{\!\top} a_j .
+\]
+So minimising $E$ is the same as maximising the second term, and
+\[
+  \frac1N\sum_j a_j^{\!\top} U_kU_k^{\!\top} a_j
+  = \frac1N\sum_j \sum_{i=1}^{k} (u_i^{\!\top} a_j)^2
+  = \sum_{i=1}^{k} u_i^{\!\top} C u_i ,
+\]
+which is exactly the total variance captured, i.e.\ View~1 summed over $k$
+directions. \textbf{Minimising reconstruction error and maximising captured
+variance are the same problem.} This is worth remembering, because it is precisely
+the property Fisher's LDA does \emph{not} have: LDA is not trying to reconstruct
+anything.
+
+\subsection{View 3: the SVD}
+
+Write the thin SVD $A = U\Sigma V^{\!\top}$, with $U\in\R^{d\times N}$ and
+$V\in\R^{N\times N}$ having orthonormal columns and $\Sigma$ diagonal with
+$\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
+\[
+  C = \frac1N AA^{\!\top} = \frac1N U\Sigma V^{\!\top} V \Sigma U^{\!\top} = U\frac{\Sigma^2}{N}U^{\!\top},
+\]
+using $V^{\!\top} V=I$. This is already an eigendecomposition of $C$: the left
+singular vectors of $A$ \emph{are} the eigenfaces, and
+\[
+  \lambda_i = \frac{\sigma_i^2}{N}.
+\]
+So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $A$
+directly. Section~\ref{sec:eigvssvd} explains why the SVD route is numerically
+safer, and shows the two agreeing in our code.
+
+\section{The \texorpdfstring{$L=A^{\!\top}\!A$}{L = A'A} trick}
+
+\paragraph{The problem.} $C$ is $d\times d$. For Yale, $d=32256$, so $C$ has
+$32256^2 = 1.04\times 10^9$ entries. At 8 bytes each that is $\mathbf{8.3}$~GB --
+our script prints this number in section S5. We cannot even store $C$, let alone
+eigendecompose it. But we only have $N=1520$ images, so the data cannot possibly
+span more than $1520$ dimensions. The trick exploits exactly that.
+
+\begin{theorem}[Gram trick]\label{thm:gram}
+Let $A\in\R^{d\times N}$ and $L = A^{\!\top}\!A \in \R^{N\times N}$.
+If $Lv=\lambda v$ with $v \neq 0$ and $\lambda \neq 0$, then $u := Av$ satisfies
+\[
+  (AA^{\!\top})\,u \;=\; \lambda\, u ,
+\]
+so $Av$ is an eigenvector of $AA^{\!\top}$ with the same eigenvalue $\lambda$.
+Moreover $\|Av\| = \sqrt{\lambda}\,\|v\|$.
+\end{theorem}
+
+\begin{proof}
+Start from the left-hand side and just insert brackets:
+\[
+  (AA^{\!\top})(Av) \;=\; A\,(A^{\!\top}\!A\,v) \;=\; A\,(Lv) \;=\; A(\lambda v) \;=\; \lambda\,(Av).
+\]
+That is the first claim. We also need $Av\neq 0$, otherwise it is not an
+eigenvector: if $Av=0$ then $Lv = A^{\!\top}(Av) = 0$, so $\lambda v = 0$, and since
+$v\neq0$ this forces $\lambda=0$, which we excluded.
+
+For the norm, take $v$ with $\|v\|=1$:
+\[
+  \|Av\|^2 = (Av)^{\!\top}(Av) = v^{\!\top} A^{\!\top}\!A v = v^{\!\top} L v = v^{\!\top}(\lambda v) = \lambda .
+\]
+\end{proof}
+
+\begin{gotcha}
+Theorem~\ref{thm:gram} gives eigen\emph{vectors}, not \emph{unit} eigenvectors.
+$\|Av\| = \sqrt{\lambda}$, which for face data is a huge number, not $1$. Every
+column must be divided by its own norm afterwards. In our code:
+\begin{lstlisting}
+U = A * V;
+for i = 1:size(U, 2)
+    nrm = norm(U(:, i));
+    if nrm > 1e-10
+        U(:, i) = U(:, i) / nrm;
+    end
+end
+\end{lstlisting}
+If this loop is omitted, the eigenfaces are still the right \emph{directions}, so
+the recognition rates barely change -- nearest neighbour is affected only through
+the relative scaling between axes -- but $U^{\!\top} U \ne I$, the reconstruction
+formula $\mu + U_kU_k^{\!\top}(x-\mu)$ is no longer a projection, and the
+reconstruction-error identity of Theorem~\ref{thm:recon} fails. We verify
+orthonormality directly in section S12(a) of the script and measure
+$\|U^{\!\top} U - I\|_F = 9.060\times 10^{-14}$ for 20 ORL eigenfaces.
+\end{gotcha}
+
+\begin{gotcha}
+The trick only helps when $N \ll d$. It replaces a $d\times d$ eigenproblem
+(cost $O(d^3)$) with an $N\times N$ one (cost $O(N^3)$) plus the product $Av$.
+For Yale that is $1520^3\approx 3.5\times10^9$ instead of
+$32256^3\approx 3.4\times10^{13}$, about $10^4$ times cheaper. But if we ever had
+$N=100{,}000$ training images with $d=784$ (as in MNIST), the trick would be
+\emph{far worse} than just forming the $784\times784$ covariance. It is a
+conditional optimisation, not a universal improvement.
+\end{gotcha}
+
+\begin{corollary}\label{cor:rank}
+$A$ has at most $N$ non-zero singular values, and after mean subtraction at most
+$N-1$. Hence PCA on $N$ images yields at most $N-1$ usable eigenfaces, no matter
+how large $d$ is.
+\end{corollary}
+\begin{proof}
+$\rank(A)\le\min(d,N)=N$. The columns of $A$ additionally satisfy one linear
+constraint, $\sum_j a_j = \sum_j (x_j-\mu) = N\mu - N\mu = 0$, so the columns are
+linearly dependent and the rank drops by at least one more, giving
+$\rank(A)\le N-1$.
+\end{proof}
+
+So for ORL-32 ($N=192$) the last eigenvalue is numerically zero and its
+``eigenface'' is pure round-off noise. That is why the normalisation loop above
+guards with \texttt{if nrm > 1e-10} -- without the guard we would divide noise by
+its own tiny norm and amplify it into a full-amplitude garbage image.
+
+\section{How much do we lose by keeping only \texorpdfstring{$k$}{k} components?}
+
+\begin{theorem}[Reconstruction error]\label{thm:recon}
+Let $\lambda_1\ge\lambda_2\ge\cdots\ge\lambda_N$ be the eigenvalues of
+$C=\frac1N AA^{\!\top}$ with orthonormal eigenvectors $u_1,\dots$. Keeping the top
+$k$, the mean squared reconstruction error is
+\[
+  E_k \;=\; \frac1N \sum_{j=1}^{N}\bigl\|a_j - U_kU_k^{\!\top} a_j\bigr\|^2
+        \;=\; \sum_{i=k+1}^{N}\lambda_i ,
+\]
+the sum of the eigenvalues we threw away.
+\end{theorem}
+
+\begin{proof}
+The eigenvectors $u_1,\dots,u_N$ of the symmetric matrix $C$ form an orthonormal
+basis of the space spanned by the data, so we may expand each centred image as
+$a_j=\sum_{i} \alpha_{ij}u_i$ with $\alpha_{ij}=u_i^{\!\top} a_j$. Because the basis is
+orthonormal, Pythagoras gives $\|a_j\|^2=\sum_i \alpha_{ij}^2$.
+
+Keeping only the first $k$ basis vectors, $U_kU_k^{\!\top} a_j = \sum_{i\le k}\alpha_{ij}u_i$,
+so the residual is $a_j - U_kU_k^{\!\top} a_j = \sum_{i>k}\alpha_{ij}u_i$ and, by
+Pythagoras again,
+\[
+  \bigl\|a_j-U_kU_k^{\!\top} a_j\bigr\|^2 = \sum_{i>k}\alpha_{ij}^2 .
+\]
+Average over $j$ and swap the two (finite) sums:
+\[
+  E_k = \frac1N\sum_j\sum_{i>k}\alpha_{ij}^2
+      = \sum_{i>k}\frac1N\sum_j (u_i^{\!\top} a_j)^2
+      = \sum_{i>k} u_i^{\!\top} C u_i
+      = \sum_{i>k} \lambda_i ,
+\]
+using $\frac1N\sum_j (u^{\!\top} a_j)^2 = u^{\!\top} Cu$ from View~1, and then
+$u_i^{\!\top} Cu_i=\lambda_i$.
+\end{proof}
+
+\begin{observation}
+Our script checks this identity numerically on ORL-32 and the two sides agree to
+every digit printed:
+\begin{center}
+\begin{tabular}{rrr}
+\toprule
+$k$ & measured error & $\sum_{i>k}\lambda_i$ \\
+\midrule
+10  & 5975095.1313 & 5975095.1313 \\
+50  & 2173731.2973 & 2173731.2973 \\
+100 &  894177.2765 &  894177.2765 \\
+\bottomrule
+\end{tabular}
+\end{center}
+This is the single best check that the whole PCA pipeline -- mean subtraction, the
+Gram trick, the sorting, the normalisation and the eigenvalue scaling -- is
+correct. If \emph{any} one of those steps is wrong, these two columns disagree.
+\end{observation}
+
+\section{Numerical gotchas in the eigenfaces code}
+\label{sec:scaling}
+
+\begin{gotcha}[\texttt{eig} returns eigenvalues in ascending order]
+MATLAB's \texttt{eig} does \emph{not} sort by importance. For a symmetric matrix it
+returns eigenvalues in ascending order, so the \emph{first} column is the
+\emph{least} important direction -- the exact opposite of what we want. Hence
+\begin{lstlisting}
+[eigvals, idx] = sort(diag(D), 'descend');
+V = V(:, idx);
+\end{lstlisting}
+Forgetting this does not produce an error; it silently gives a recogniser that uses
+the noisiest directions and performs at chance level. \texttt{diag(D)} is needed
+because the two-output form of \texttt{eig} returns eigenvalues as a diagonal
+\emph{matrix} $D$, not a vector.
+\end{gotcha}
+
+\begin{gotcha}[Eigenvalues of $L$ are $N$ times the eigenvalues of $C$]
+We diagonalise $L=A^{\!\top}\!A$, but Theorem~\ref{thm:recon} is stated for
+$C=\frac1N AA^{\!\top}$. By Theorem~\ref{thm:gram} the non-zero eigenvalues of
+$A^{\!\top}\!A$ and $AA^{\!\top}$ are \emph{the same}; the factor of $N$ comes only from the
+$\frac1N$ in the definition of $C$. So
+\[
+  \lambda_i(C) = \frac{\lambda_i(L)}{N},
+\]
+which in code is the single line \texttt{lambda = eigvals / M;}. Drop it and the
+reconstruction table above is wrong by a factor of $192$ -- the recognition rates
+are unaffected, which is exactly what makes this bug easy to miss.
+\end{gotcha}
+
+\begin{gotcha}[Eigenvector signs are arbitrary]
+If $Cu=\lambda u$ then $C(-u)=\lambda(-u)$, so $-u$ is just as valid an
+eigenvector. Two correct programs can therefore return eigenfaces that look like
+photographic negatives of each other. Nothing downstream is affected: the
+projection $U_kU_k^{\!\top}$ and the distance $\|U_k^{\!\top} a - U_k^{\!\top} b\|$ are both
+unchanged by flipping a column's sign. But it means you must never compare two
+implementations with $\|u_1-u_2\|$; compare $|u_1^{\!\top} u_2|$ instead, which is what
+our section S12(b) does.
+\end{gotcha}
+
+\subsection{\texttt{eig} on \texorpdfstring{$A^{\!\top}\!A$}{A'A} versus \texttt{svd} of \texorpdfstring{$A$}{A}}
+\label{sec:eigvssvd}
+
+Both routes give the same subspace, but they are not equally accurate. The
+singular values of $A$ and the eigenvalues of $L=A^{\!\top}\!A$ are related by
+$\lambda_i = \sigma_i^2$. The \emph{condition number} -- the ratio of largest to
+smallest, which controls how much round-off gets amplified -- therefore satisfies
+\[
+  \kappa(L) \;=\; \frac{\lambda_1}{\lambda_N} \;=\; \frac{\sigma_1^2}{\sigma_N^2}
+  \;=\; \kappa(A)^2 .
+\]
+\textbf{Forming $A^{\!\top}\!A$ squares the condition number.} In rough terms, if $A$
+is accurate to 16 digits, $L$ is accurate to 8. Computing the SVD of $A$ directly
+never forms $L$ and so avoids the squaring.
+
+We kept the $L=A^{\!\top}\!A$ route because it is what HW3 used and because it is much
+cheaper, but we verify against the SVD in section S12(b). The first ten components
+agree to all printed digits:
+\begin{lstlisting}
+(b) |u_svd . u_eig| for the first 10 components:
+    1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000
+    min over those 10 = 1.00000000 (1.0 means identical direction)
+\end{lstlisting}
+The agreement is perfect for the \emph{leading} components because those have large
+$\sigma_i$ and are well separated. It is the \emph{trailing} components, where
+$\sigma_i$ is tiny, that the squaring damages -- and those are exactly the ones
+Fisherfaces will be forced to use in Part~III, which is why this matters later.
+
+\section{Why the top 3 eigenfaces encode lighting: the Lambertian argument}
+\label{sec:lambert}
+
+This is the theoretical core of the paper's first ``trick'', and it explains the
+single most striking number in our HW3 results.
+
+\subsection{The reflectance model}
+
+A surface is \emph{Lambertian} if it looks equally bright from every viewing angle,
+with brightness depending only on the angle between the surface normal and the
+light. For a point with unit surface normal $\mathbf{n}\in\R^3$ and albedo
+(reflectivity) $\rho$, lit by a distant point source whose direction and strength
+are packed into a single vector $\mathbf{s}\in\R^3$, the observed intensity is
+\[
+  I \;=\; \rho \,\max\bigl(\mathbf{n}^{\!\top}\mathbf{s},\,0\bigr).
+\]
+The $\max(\cdot,0)$ is \emph{attached shadow}: a surface turned away from the light
+receives nothing, and negative light is not a thing.
+
+\subsection{The 3-dimensional illumination subspace}
+
+\begin{theorem}\label{thm:cone}
+Fix a face and a camera position, and ignore shadowing (i.e.\ drop the
+$\max(\cdot,0)$). Then the set of all images of that face, over all lighting
+directions and intensities $\mathbf{s}\in\R^3$, is a linear subspace of $\R^d$ of
+dimension at most $\mathbf{3}$.
+\end{theorem}
+
+\begin{proof}
+Number the pixels $p=1,\dots,d$. Pixel $p$ sees a surface patch with normal
+$\mathbf{n}_p$ and albedo $\rho_p$; define $\mathbf{b}_p := \rho_p\mathbf{n}_p \in \R^3$, which
+depends only on the face, not on the lighting. Without the $\max$, the intensity at
+pixel $p$ under lighting $\mathbf{s}$ is
+\[
+  I_p(\mathbf{s}) = \mathbf{b}_p^{\!\top}\mathbf{s}.
+\]
+Stack the rows $\mathbf{b}_p^{\!\top}$ into a matrix $B\in\R^{d\times 3}$. Then the whole
+image is
+\[
+  x(\mathbf{s}) \;=\; B\,\mathbf{s}.
+\]
+As $\mathbf{s}$ ranges over all of $\R^3$, $x(\mathbf{s})$ ranges over the column
+space of $B$, which is a subspace of dimension $\rank(B)\le 3$.
+\end{proof}
+
+\paragraph{Reading the theorem.} Every image of \emph{one} person under \emph{any}
+lighting is a linear combination of just three fixed images. Lighting variation,
+for a fixed face, is a 3-dimensional phenomenon.
+
+\subsection{What this does to PCA}
+
+In the cropped Yale database each person is photographed under a few dozen
+different lighting conditions in the same pose (between $59$ and $64$ images per
+subject in our copy -- the count is not constant, which is why nothing in the
+code may hardcode $64$). By Theorem~\ref{thm:cone}, the variation \emph{within}
+one person is (approximately) 3-dimensional, and it is enormous -- the difference
+between a face lit from the left and the same face lit from the right is a far
+bigger change in pixel values than the difference between two different people lit
+the same way.
+
+PCA maximises total variance and is blind to labels. It therefore spends its first
+few components on the biggest variance available, which is lighting, not identity.
+Discarding components $1,2,3$ discards (approximately) the illumination subspace
+and keeps the identity information.
+
+\begin{observation}[Our measured numbers]
+On Yale, dropping the top 3 eigenfaces raises recognition from
+$\mathbf{34.2\%}$ to $\mathbf{58.7\%}$ -- it nearly doubles. On ORL, the same
+operation \emph{lowers} recognition from $\mathbf{95.3\%}$ to $\mathbf{87.5\%}$.
+
+The sign flip is the whole point. ORL has almost no lighting variation; its
+images differ by pose and expression. There the leading components carry genuine
+identity information, so throwing them away destroys signal. \textbf{The ``drop
+three components'' trick is not a general improvement -- it is a targeted fix for a
+specific nuisance, and it is harmful when that nuisance is absent.}
+\end{observation}
+
+\begin{gotcha}
+Theorem~\ref{thm:cone} needed us to drop the $\max(\cdot,0)$. Real faces are not
+convex -- the nose casts a shadow on the cheek -- so the true set of images is not
+a 3-D subspace but a \emph{cone} of higher dimension. This is why the trick removes
+most but not all of the illumination effect, and why 58.7\% is a big improvement
+rather than a complete fix. Fisherfaces will do better precisely because it does
+not assume the nuisance occupies exactly three dimensions; it \emph{learns} which
+directions are nuisance from the labels.
+\end{gotcha}
+
+\part{Fisher's linear discriminant}
+
+\section{The idea in one picture}
+
+PCA asks ``which direction has the most spread?''. That is the wrong question when
+we have labels, because spread can come from two sources: differences
+\emph{between} people (useful) and differences \emph{within} one person caused by
+lighting or expression (nuisance). PCA cannot tell them apart.
+
+Fisher's question is ``which direction best \emph{separates} the classes?'', made
+precise as: the direction along which the classes' means are far apart
+\emph{relative to} how much each class is smeared out.
+
+Our script makes this concrete in section S1 with a 2-D example designed so the two
+answers disagree maximally. Two classes share the covariance
+$\Sigma=\operatorname{diag}(16,\,0.25)$, with means $(0,-1)$ and $(0,+1)$. The
+spread within each class is huge along $x$ and tiny along $y$; the classes are
+separated only along $y$. Measured output:
+\begin{lstlisting}
+  LDA direction : (-0.0054, 1.0000)      <- the y axis: correct
+  PCA direction : (-0.9999, -0.0146)     <- the x axis: useless
+  J(w_LDA)  = 4.187377
+  J(w_PCA)  = 0.000894
+  ratio J(LDA)/J(PCA) = 4685.5
+  error along w_LDA = 1.70%
+  error along w_PCA = 48.30%
+\end{lstlisting}
+Projecting on the PCA direction gives 48.3\% error -- barely better than guessing.
+See Figure~\ref{fig:toy}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/s1_toy.png}
+\caption{S1: the same data, two directions. Black is the PCA direction (most
+variance), green is the LDA direction (most separation). The right-hand panels show
+the 1-D histograms after projection: on $w_{LDA}$ the classes separate cleanly, on
+$w_{PCA}$ they sit on top of each other.}
+\label{fig:toy}
+\end{figure}
+
+\section{Two classes: deriving the closed form}
+
+\subsection{Setting up the criterion}
+
+Let class $i$ have $n_i$ training points, mean $\mu_i$, and let $\mu$ be the
+overall mean. Define the \textbf{within-class scatter} and \textbf{between-class
+scatter}
+\[
+  \Sw \;=\; \sum_{i=1}^{c}\;\sum_{x \in \text{class } i}(x-\mu_i)(x-\mu_i)^{\!\top},
+  \qquad
+  \Sb \;=\; \sum_{i=1}^{c} n_i\,(\mu_i-\mu)(\mu_i-\mu)^{\!\top}.
+\]
+Both are sums of outer products, hence symmetric and positive semi-definite.
+
+Project onto a direction $w$. By the same one-line computation as in View~1, the
+projected between-class spread is $w^{\!\top}\Sb w$ and the projected within-class
+spread is $w^{\!\top}\Sw w$. Fisher's criterion is their ratio:
+\[
+  \boxed{\;J(w) \;=\; \frac{w^{\!\top}\Sb w}{w^{\!\top}\Sw w}\;}
+\]
+We want to make this as large as possible: means far apart (big numerator), classes
+tight (small denominator).
+
+\begin{gotcha}[The criterion is scale-invariant, so $\|w\|$ is meaningless]
+Replace $w$ by $\alpha w$ for any $\alpha\ne 0$:
+\[
+  J(\alpha w) = \frac{\alpha^2 w^{\!\top}\Sb w}{\alpha^2 w^{\!\top}\Sw w} = J(w).
+\]
+The $\alpha^2$ cancels. So $J$ cares only about the \emph{direction} of $w$, and
+the answer is a line through the origin, not a particular vector on it. This is why
+we are free to normalise the Fisherfaces to unit length afterwards -- and why we
+\emph{must} choose some convention, since nearest-neighbour distances do depend on
+the scaling. A ratio like this is called a \emph{generalised Rayleigh quotient}.
+\end{gotcha}
+
+\subsection{Doing the maximisation}
+
+Because of scale invariance we may fix the denominator and maximise the numerator:
+\[
+  \max_w\; w^{\!\top}\Sb w \quad\text{subject to}\quad w^{\!\top}\Sw w = 1 .
+\]
+Lagrangian:
+\[
+  \mathcal{L}(w,\lambda) = w^{\!\top}\Sb w - \lambda\,(w^{\!\top}\Sw w - 1).
+\]
+Both $\Sb$ and $\Sw$ are symmetric, so we may use
+$\partial(w^{\!\top} Mw)/\partial w = 2Mw$ on each term:
+\[
+  \frac{\partial\mathcal{L}}{\partial w} = 2\Sb w - 2\lambda \Sw w = 0
+  \qquad\Longrightarrow\qquad
+  \boxed{\;\Sb w = \lambda\, \Sw w\;}
+\]
+This is a \textbf{generalised eigenvalue problem}. (If $\Sw=I$ it collapses to the
+ordinary one.) Just as before, multiplying on the left by $w^{\!\top}$ identifies what
+$\lambda$ is:
+\[
+  w^{\!\top}\Sb w = \lambda\,w^{\!\top}\Sw w
+  \qquad\Longrightarrow\qquad
+  \lambda = \frac{w^{\!\top}\Sb w}{w^{\!\top}\Sw w} = J(w).
+\]
+\textbf{The eigenvalue is the value of the criterion.} So we want the eigenvectors
+with the largest $\lambda$, exactly as in PCA.
+
+\subsection{The two-class closed form}\label{sec:twoclass}
+
+With $c=2$ we can solve it by hand. First simplify $\Sb$. The overall mean is
+$\mu=\frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}$, so
+\[
+  \mu_1-\mu = \mu_1 - \frac{n_1\mu_1+n_2\mu_2}{n_1+n_2}
+            = \frac{n_2(\mu_1-\mu_2)}{n_1+n_2},
+  \qquad
+  \mu_2-\mu = \frac{n_1(\mu_2-\mu_1)}{n_1+n_2}.
+\]
+Writing $\delta := \mu_1-\mu_2$ and $n:=n_1+n_2$,
+\[
+  \Sb = n_1\frac{n_2^2}{n^2}\delta\delta^{\!\top} + n_2\frac{n_1^2}{n^2}\delta\delta^{\!\top}
+      = \frac{n_1n_2(n_2+n_1)}{n^2}\,\delta\delta^{\!\top}
+      = \frac{n_1n_2}{n}\,\delta\delta^{\!\top}.
+\]
+So for two classes $\Sb$ is a positive multiple of $\delta\delta^{\!\top}$, a
+\textbf{rank-one} matrix. Substituting into $\Sb w=\lambda\Sw w$ and absorbing the
+constant $\frac{n_1n_2}{n}$ into $\lambda$:
+\[
+  \delta\,(\delta^{\!\top} w) \;=\; \lambda' \,\Sw w .
+\]
+Now $\delta^{\!\top} w$ is a \emph{scalar}. Assuming $\Sw$ is invertible, multiply by
+$\Sw^{-1}$:
+\[
+  \Sw^{-1}\delta\,(\delta^{\!\top} w) = \lambda' w
+  \qquad\Longrightarrow\qquad
+  w = \frac{\delta^{\!\top} w}{\lambda'}\;\Sw^{-1}\delta .
+\]
+The prefactor is just a scalar, and we established that scale does not matter, so
+\[
+  \boxed{\;w \;\propto\; \Sw^{-1}(\mu_1-\mu_2)\;}
+\]
+\paragraph{How to read this formula.} If $\Sw = I$ (classes are spherical), $w$
+points straight from one mean to the other, which is the obvious answer.
+$\Sw^{-1}$ corrects that naive guess for the shape of the classes: directions in
+which the classes are already broadly smeared get \emph{down-weighted}. In our toy
+data $\Sigma^{-1}=\operatorname{diag}(1/16,\,4)$ and $\mu_2-\mu_1=(0,2)^{\!\top}$, so
+\[
+  w \propto \operatorname{diag}(1/16,4)\,(0,2)^{\!\top} = (0,8)^{\!\top},
+\]
+the $y$ axis -- and the code prints $(-0.0054, 1.0000)$, agreeing.
+
+\begin{observation}[We checked this is really the maximum]
+Rather than trusting the algebra, section S1 tries \emph{every} direction
+$(\cos t,\sin t)$ on a grid of $6283$ angles and takes the best:
+\begin{lstlisting}
+  brute-force best J over 6283 directions = 4.187363
+  J(w_LDA) - J(brute) = 1.425e-05  (should be >= 0, up to grid step)
+  |cos angle| between closed-form w and brute-force w = 0.99999997
+\end{lstlisting}
+The closed form beats the entire grid, and points in the same direction as the grid
+winner to 7 decimal places. This is a direct numerical confirmation of the
+derivation, and it needs no toolbox.
+\end{observation}
+
+\begin{observation}[Agreement with the theoretical Bayes error]
+For two Gaussian classes with equal priors and a \emph{shared} covariance $\Sigma$,
+the optimal (Bayes) error rate is $\Phi(-\Delta/2)$ where
+$\Delta^2 = (\mu_2-\mu_1)^{\!\top}\Sigma^{-1}(\mu_2-\mu_1)$ is the Mahalanobis
+distance between the means. Here
+\[
+  \Delta^2 = (0,2)\operatorname{diag}(1/16,4)(0,2)^{\!\top} = 16,\qquad \Delta = 4,
+\]
+so the Bayes error is $\Phi(-2)=2.28\%$. Our measured error along $w_{LDA}$ is
+$1.70\%$, close to it (slightly below, because with $500$ samples per class the
+empirical threshold happens to fit this particular sample a little better than the
+population-optimal one). Along $w_{PCA}$ we measure $48.30\%$.
+
+This is the strongest possible statement of LDA's optimality: \textbf{when the
+classes really are Gaussian with equal covariance, LDA's 1-D projection loses
+essentially nothing} compared to the best possible classifier in the full space.
+\end{observation}
+
+\begin{gotcha}
+MATLAB's \texttt{normcdf} lives in the Statistics Toolbox, which is \emph{not}
+installed on our machine. We compute $\Phi(-a)$ from the complementary error
+function, which is in base MATLAB:
+\[
+  \Phi(-a) \;=\; \tfrac12\operatorname{erfc}\!\left(\frac{a}{\sqrt2}\right),
+  \qquad\text{code: } \texttt{0.5 * erfc((delta/2)/sqrt(2))}.
+\]
+\end{gotcha}
+
+\section{Many classes}
+
+\subsection{The three scatter matrices and how they relate}
+
+With $c$ classes we also define the \textbf{total scatter}
+\[
+  \St \;=\; \sum_{j=1}^{N}(x_j-\mu)(x_j-\mu)^{\!\top} .
+\]
+Note $\St = N\cdot C$: total scatter is total covariance without the $\frac1N$.
+
+\begin{theorem}[Scatter decomposition]\label{thm:decomp}
+$\St = \Sb + \Sw$.
+\end{theorem}
+
+\begin{proof}
+Take any $x$ in class $i$ and insert $\mu_i$ twice:
+\[
+  x-\mu = (x-\mu_i) + (\mu_i-\mu).
+\]
+Write $u=x-\mu_i$ and $v=\mu_i-\mu$. Then
+\[
+  (x-\mu)(x-\mu)^{\!\top} = (u+v)(u+v)^{\!\top} = uu^{\!\top} + uv^{\!\top} + vu^{\!\top} + vv^{\!\top}.
+\]
+Sum over the $n_i$ points of class $i$. The vector $v$ does not depend on which
+point we are at, so it factors out of the cross terms:
+\[
+  \sum_{x\in i} uv^{\!\top} = \Bigl(\sum_{x\in i}(x-\mu_i)\Bigr)v^{\!\top} = 0\cdot v^{\!\top} = 0,
+\]
+because the deviations from a class's own mean sum to zero \emph{by the definition
+of the mean}. The same kills $\sum vu^{\!\top}$. What is left is
+\[
+  \sum_{x\in i}(x-\mu)(x-\mu)^{\!\top} = \underbrace{\sum_{x\in i}(x-\mu_i)(x-\mu_i)^{\!\top}}_{\text{class $i$'s contribution to }\Sw} + \underbrace{n_i (\mu_i-\mu)(\mu_i-\mu)^{\!\top}}_{\text{class $i$'s contribution to }\Sb}.
+\]
+Summing over $i=1,\dots,c$ gives $\St=\Sw+\Sb$.
+\end{proof}
+
+\begin{observation}
+Theorem~\ref{thm:decomp} is a free correctness test, and our code runs it every
+time it builds the scatter matrices:
+\begin{lstlisting}
+info.resST = norm(St - (Sb + Sw), 'fro') / norm(St, 'fro');
+\end{lstlisting}
+Across all five dataset configurations the measured relative residual lies between
+$2.7\times10^{-16}$ and $8.6\times10^{-16}$, i.e.\ machine precision. If a class
+mean or a count $n_i$ were computed wrongly, this number would jump immediately.
+\end{observation}
+
+\subsection{The multi-class criterion}
+
+With $c$ classes we want a whole projection \emph{matrix} $W\in\R^{d\times k}$, not
+one direction. Projecting, the scatter matrices become $W^{\!\top}\Sb W$ and
+$W^{\!\top}\Sw W$, which are $k\times k$ matrices -- so ``ratio'' needs a definition.
+The standard choice is the ratio of determinants,
+\[
+  J(W) \;=\; \frac{\bigl|W^{\!\top}\Sb W\bigr|}{\bigl|W^{\!\top}\Sw W\bigr|} .
+\]
+The determinant is used because it is the product of the eigenvalues, i.e.\ the
+\emph{volume} the scattered points occupy; so $J$ compares between-class volume to
+within-class volume. The maximiser is the matrix whose columns are the $k$
+generalised eigenvectors $\Sb w_i = \lambda_i \Sw w_i$ with the largest
+$\lambda_i$ -- the same equation as the two-class case.
+
+\begin{theorem}[The answer is a subspace, not a basis]\label{thm:invariance}
+For any invertible $k\times k$ matrix $M$, $J(WM) = J(W)$.
+\end{theorem}
+\begin{proof}
+$(WM)^{\!\top}\Sb(WM) = M^{\!\top}(W^{\!\top}\Sb W)M$, and determinants multiply, so
+$|M^{\!\top}(W^{\!\top}\Sb W)M| = |M|^2\,|W^{\!\top}\Sb W|$. The same factor $|M|^2$ appears in
+the denominator and cancels.
+\end{proof}
+
+\paragraph{Why this matters.} LDA pins down the \emph{subspace} spanned by the
+Fisherfaces, but not which basis of it you get, and not the scaling of each basis
+vector. Two correct implementations can return visibly different Fisherface
+\emph{images} while defining the same projection. So ``my Fisherface pictures look
+different from the paper's'' is not evidence of a bug.
+
+\section{The rank theorems: why there are at most \texorpdfstring{$c-1$}{c-1} Fisherfaces}
+
+\begin{theorem}\label{thm:rankSb}
+$\rank(\Sb)\le c-1$.
+\end{theorem}
+\begin{proof}
+$\Sb=\sum_{i=1}^c n_i(\mu_i-\mu)(\mu_i-\mu)^{\!\top}$ is a sum of $c$ rank-one matrices,
+so immediately $\rank(\Sb)\le c$. Its column space is spanned by the $c$ vectors
+$\mu_i-\mu$. But those vectors satisfy one linear relation:
+\[
+  \sum_{i=1}^{c} n_i(\mu_i-\mu) = \sum_i n_i\mu_i - \Bigl(\sum_i n_i\Bigr)\mu = N\mu - N\mu = 0,
+\]
+using $\sum_i n_i\mu_i = \sum_j x_j = N\mu$. A set of $c$ vectors with a non-trivial
+linear dependence spans a space of dimension at most $c-1$. Hence
+$\rank(\Sb)\le c-1$.
+\end{proof}
+
+\begin{corollary}[The hard ceiling]
+Since $\Sb w=\lambda\Sw w$ forces $\lambda=0$ whenever $w$ lies in the null space of
+$\Sb$, at most $c-1$ generalised eigenvalues are non-zero. \textbf{There are at
+most $c-1$ useful Fisherfaces, however many pixels or training images we have.}
+\end{corollary}
+
+For ORL-32 that is $31$; for ORL-40, $39$; for Yale, $37$.
+
+\begin{observation}
+Section S12(d) measures it:
+\begin{lstlisting}
+  (d) ORL-32: c = 32, so theory says rank(S_B) <= 31
+      measured rank(S_B) = 31, number of fisherfaces = 31
+\end{lstlisting}
+The bound is tight here.
+\end{observation}
+
+\begin{theorem}\label{thm:rankSw}
+$\rank(\Sw)\le N-c$.
+\end{theorem}
+\begin{proof}
+Let $A_W$ be the $d\times N$ matrix whose columns are the within-class-centred
+images $x_j-\mu_{\text{class}(j)}$. Then $\Sw=A_WA_W^{\!\top}$, so
+$\rank(\Sw)=\rank(A_W)$.
+
+Group the columns by class. Within class $i$, the $n_i$ columns sum to zero (again
+by the definition of $\mu_i$), so those $n_i$ columns span a space of dimension at
+most $n_i-1$. Summing over classes,
+\[
+  \rank(A_W)\;\le\;\sum_{i=1}^{c}(n_i-1) \;=\; \Bigl(\sum_i n_i\Bigr) - c \;=\; N-c. \qedhere
+\]
+\end{proof}
+
+\paragraph{The degrees-of-freedom reading -- remember this one.}
+The proof says each class donates only $n_i-1$ directions to $\Sw$. So:
+\begin{itemize}[nosep]
+\item ORL with $6$ images per person: each class contributes $\mathbf{5}$ directions.
+\item Yale with $40$ images per person: each class contributes $\mathbf{39}$.
+\end{itemize}
+$\Sw$ is our estimate of ``how a person's images vary''. On ORL that estimate is
+built from five directions per person, which is almost nothing. This single fact
+predicts most of what we observe in Part~V, including why Fisherfaces \emph{lose}
+on ORL.
+
+\begin{observation}[Measured --- and how a dataset defect showed up in the rank]
+Section S5 computes $\rank(\Sw)$ for Yale without ever forming the $d\times d$
+matrix, by using $\rank(A_WA_W^{\!\top})=\rank(A_W)=\rank(A_W^{\!\top} A_W)$ and
+working with the small $N\times N$ Gram matrix instead:
+\begin{lstlisting}
+  Yale: d = 32256, N = 1520, c = 38
+  S_W in pixel space would be 32256 x 32256 = 8.32 GB
+  theory: rank(S_W) <= N - c = 1482
+  measured rank(S_W)         = 1482
+\end{lstlisting}
+
+On our \emph{first} run the measured rank came out as $\mathbf{1481}$ -- one \emph{less}
+than the bound. Rather than wave it away, we tracked it down. A rank deficiency
+beyond the predicted one means some class has an \emph{exact} linear dependency
+among its images, and the simplest way that happens is a repeated image. Adding a
+duplicate search to the script found exactly one pair, in subject 12. The culprit
+was a stray file in our copy of the database,
+\begin{center}
+\texttt{CroppedYale/yaleB12/yaleB12\_P00A+020E+10 - Copy.pgm}
+\end{center}
+byte-identical to \texttt{yaleB12\_P00A+020E+10.pgm} -- somebody had accidentally
+duplicated a file inside the dataset. Two identical columns stay identical after
+within-class centring, so they are an exact linear dependency and cost exactly one
+unit of rank: $1482-1 = 1481$, which is what we measured.
+
+We removed the stray file and re-ran everything. The rank now meets the bound
+exactly, and the duplicate search reports none. All numbers in this document come
+from the cleaned dataset.
+
+Two lessons worth carrying: $N-c$ is an \emph{upper} bound that real data can fall
+short of through repeated or linearly dependent images; and a rank that disagrees
+with theory by a small amount is usually telling you something true about the data
+rather than about the algorithm.
+\end{observation}
+
+\begin{gotcha}
+Removing that file also changed the \emph{split}, which is a subtler effect than it
+first appears. \texttt{dir} sorts alphabetically, and the string
+\texttt{'yaleB12\_P00A+020E+10 - Copy.pgm'} sorts \emph{before}
+\texttt{'yaleB12\_P00A+020E+10.pgm'} (a space, ASCII 32, is smaller than the dot,
+ASCII 46). So the duplicate used to sit inside subject 12's first 40 files, i.e.\
+inside the training set, and deleting it pulls one previously-unseen image forward
+from test into train for that one subject. Changing a dataset is never only a
+change to the data: here it silently moved one image across the train/test
+boundary.
+\end{gotcha}
+
+\part{Fisherfaces}
+
+\section{The small-sample-size problem}
+
+Fisher's LDA needs $\Sw^{-1}$. For face images that is impossible, for two separate
+reasons, and it is important to keep them apart because they have different fixes.
+
+\begin{enumerate}[label=(\arabic*)]
+\item \textbf{Size.} $\Sw$ is $d\times d$. For Yale, $32256^2$ doubles is
+  $\mathbf{8.3}$~GB. We cannot store it, never mind invert it (cost $O(d^3)
+  \approx 3\times10^{13}$ operations).
+\item \textbf{Rank.} By Theorem~\ref{thm:rankSw}, $\rank(\Sw)\le N-c = 1482$,
+  while $d=32256$. So $\Sw$ is singular by a margin of more than $30{,}000$
+  dimensions. $\Sw^{-1}$ \emph{does not exist}. This is not a numerical difficulty
+  that a better algorithm could dodge; it is a statement about the data.
+\end{enumerate}
+
+This is the \textbf{small-sample-size problem}: we have far more measurements per
+sample ($d$) than samples ($N$). Note that (2) is not fixed by more computer
+memory. It is fixed only by reducing the dimension or by changing the estimator.
+
+\section{The two-stage algorithm}
+
+The paper's solution is to project into a space where $\Sw$ \emph{is} invertible,
+and do LDA there.
+
+\begin{enumerate}[label=\textbf{Stage \arabic*.},leftmargin=*]
+\item \textbf{PCA to $m$ dimensions.} Compute the eigenfaces of the total scatter
+  and keep the top $m$, giving $W_{\text{pca}}\in\R^{d\times m}$. The paper takes
+  $m=N-c$.
+\item \textbf{LDA inside that space.} Form $\Sb$ and $\Sw$ from the projected
+  training data (now $m\times m$ matrices, small enough to handle), solve
+  $\Sb w=\lambda\Sw w$ and keep the top $c-1$ eigenvectors as
+  $W_{\text{fld}}\in\R^{m\times(c-1)}$.
+\end{enumerate}
+
+The two projections compose into a single one:
+\[
+  W_{\text{opt}}^{\!\top} \;=\; W_{\text{fld}}^{\!\top}\,W_{\text{pca}}^{\!\top},
+  \qquad\text{i.e.}\qquad
+  W_{\text{opt}} \;=\; W_{\text{pca}}\,W_{\text{fld}} \;\in\; \R^{d\times(c-1)}.
+\]
+To classify an image $x$ we compute $W_{\text{opt}}^{\!\top}(x-\mu)\in\R^{c-1}$ and find
+its nearest training neighbour. The columns of $W_{\text{opt}}$, viewed as images,
+are the \textbf{Fisherfaces}.
+
+\subsection{Why \texorpdfstring{$m=N-c$}{m = N-c}?}
+
+A rank argument, from both sides:
+\begin{itemize}[nosep]
+\item If $m > N-c$: the projected $\Sw$ is $m\times m$ but still has rank at most
+  $N-c < m$ (projection cannot increase rank), so it is \emph{still singular}. We
+  have gained nothing.
+\item If $m = N-c$: the projected $\Sw$ is $(N-c)\times(N-c)$ with rank at most
+  $N-c$, so generically it is exactly full rank and invertible.
+\item If $m < N-c$: $\Sw$ is invertible too, but we have thrown away some
+  directions of the data before LDA ever saw them.
+\end{itemize}
+So $m=N-c$ is the \emph{largest} choice that makes $\Sw$ invertible. The paper
+picks it to discard as little as possible.
+
+\subsection{The zero-slack problem with that choice}\label{sec:zeroslack}
+
+Here is the catch, and it is the most important ``why this and not that'' in the
+whole project.
+
+At $m=N-c$, the rank of $\Sw$ equals its dimension \emph{exactly}. There is no
+slack. The last few eigenvalues of $\Sw$ are built from almost no data -- they are
+the directions in which the training set happened to vary least -- so they are
+essentially estimation noise. And $\Sw^{-1}$ \textbf{divides} by them, so it
+amplifies precisely the directions we know least about.
+
+``Invertible'' and ``well conditioned'' are not the same thing. The condition
+number
+\[
+  \kappa(\Sw) = \frac{\lambda_{\max}(\Sw)}{\lambda_{\min}(\Sw)}
+\]
+measures how badly inversion amplifies error. Our sweep in section S9 measures it
+directly as $m$ grows, and the growth is dramatic -- see Section~\ref{sec:msweep}.
+On Yale it reaches $\kappa \approx 2\times10^{11}$ at $m=N-c$, up from
+$2.6\times10^{6}$ at $m=1200$; in double precision (about $16$ significant digits)
+that leaves the smallest eigenvalues of $\Sw$ with only about five correct digits,
+and $\Sw^{-1}$ divides by exactly those.
+
+\textbf{Conclusion:} $m=N-c$ is the right answer to ``what is the largest $m$ that
+makes $\Sw$ invertible'' but the wrong answer to ``what value of $m$ gives the best
+recogniser''. We show this empirically in Section~\ref{sec:msweep}.
+
+\section{Solving \texorpdfstring{$\Sb w=\lambda\Sw w$}{Sb w = lambda Sw w} properly}
+\label{sec:solve}
+
+\subsection{The naive route and why we avoid it}
+
+The obvious move is to multiply by $\Sw^{-1}$ and solve the ordinary eigenproblem
+\[
+  \Sw^{-1}\Sb\,w = \lambda w .
+\]
+This is \emph{mathematically} fine but \emph{numerically} poor. The product
+$\Sw^{-1}\Sb$ is generally \textbf{not symmetric}, even though $\Sw$ and $\Sb$
+both are: $(\Sw^{-1}\Sb)^{\!\top} = \Sb\Sw^{-1}$, which is not the same matrix. The
+consequences are real:
+\begin{itemize}[nosep]
+\item A general non-symmetric eigensolver is used, which can return
+  \textbf{complex} eigenvalues from pure round-off, even though the true ones are
+  real and non-negative.
+\item The eigenvectors are not guaranteed orthogonal in any inner product.
+\item It explicitly forms $\Sw^{-1}$, which, given $\kappa\approx10^{11}$, is the
+  worst possible thing to do.
+\end{itemize}
+
+\subsection{Cholesky whitening: the route we use}
+
+Because $\Sw$ is symmetric positive definite, it has a \textbf{Cholesky
+factorisation} $\Sw=R^{\!\top} R$ with $R$ upper triangular and invertible. Now
+substitute $w=R^{-1}z$ into $\Sb w=\lambda\Sw w$:
+\[
+  \Sb R^{-1}z \;=\; \lambda\, \Sw R^{-1} z \;=\; \lambda\, R^{\!\top} R R^{-1} z \;=\; \lambda\, R^{\!\top} z .
+\]
+Multiply on the left by $R^{-\top} := (R^{\!\top})^{-1}$:
+\[
+  \boxed{\;\underbrace{R^{-\top}\Sb R^{-1}}_{=:\,M}\,z \;=\; \lambda\, z\;}
+\]
+and $M$ \textbf{is symmetric}, because
+$M^{\!\top} = (R^{-\top}\Sb R^{-1})^{\!\top} = R^{-\top}\Sb^{\!\top} R^{-1} = R^{-\top}\Sb R^{-1} = M$,
+using $\Sb^{\!\top}=\Sb$. So we now have an ordinary \emph{symmetric} eigenproblem,
+for which:
+\begin{itemize}[nosep]
+\item eigenvalues are guaranteed real;
+\item eigenvectors are guaranteed orthogonal;
+\item the algorithm is backward stable.
+\end{itemize}
+Having found $z$, recover $w = R^{-1}z$, i.e.\ solve $Rw=z$ (cheap: $R$ is
+triangular). Note the eigen\emph{values} $\lambda$ are unchanged by the
+substitution, so they are still exactly the Fisher criterion values.
+
+\paragraph{The name.} Setting $\tilde x = R^{-\top}x$ transforms the data so that
+the within-class scatter becomes the identity: the scatter of the transformed data
+is
+\[
+  R^{-\top}\,\Sw\,(R^{-\top})^{\!\top} \;=\; R^{-\top}\,(R^{\!\top}R)\,R^{-1} \;=\; I ,
+\]
+so the classes become spherical. This is called \emph{whitening}. It is the same
+substitution seen from the other side: the projection value
+$w^{\!\top}x = (R^{-1}z)^{\!\top}x = z^{\!\top}R^{-\top}x = z^{\!\top}\tilde x$, so searching for
+$z$ in whitened coordinates is searching for $w$ in the original ones. After whitening, ``maximise the ratio'' degenerates into
+plain ``maximise the between-class scatter'', which is ordinary PCA on the class
+means. That is a genuinely useful way to remember what LDA is:
+\begin{center}
+\textbf{LDA = whiten using $\Sw$, then do PCA on the class means.}
+\end{center}
+
+\paragraph{In code.} MATLAB's backslash and slash operators solve systems without
+forming inverses, so the whole thing is two lines:
+\begin{lstlisting}
+[R, p] = chol(Sw);                 % Sw = R'*R
+Minner = (R') \ (Sb / R);          % = inv(R')*Sb*inv(R), no inverse formed
+Minner = (Minner + Minner') / 2;   % re-symmetrise after the solves
+[Z, Dz] = eig(Minner);
+...
+Wfld = R \ Z(:, 1:(c-1));          % w = inv(R)*z
+\end{lstlisting}
+Here \texttt{Sb / R} means $\Sb R^{-1}$ (solve from the right) and
+\texttt{(R') \textbackslash\ X} means $R^{-\top}X$ (solve from the left).
+
+\begin{gotcha}[Re-symmetrise, twice]
+Two separate places need it.
+\emph{First}, $\Sw$ and $\Sb$ are built by accumulating outer products in a loop;
+in exact arithmetic the result is symmetric, but floating-point addition is not
+associative, so the computed matrices differ from their own transposes by about
+$10^{-16}$ relative. \texttt{chol} and symmetric \texttt{eig} read only one
+triangle and silently assume the other matches, so a tiny asymmetry can produce a
+misleading answer. \emph{Second}, the two triangular solves that build
+\texttt{Minner} reintroduce the same asymmetry.
+Both are fixed by \texttt{M = (M + M')/2}, which costs nothing and is exactly the
+identity in exact arithmetic.
+\end{gotcha}
+
+\begin{gotcha}[\texttt{chol} can fail, and we must handle it]
+At $m=N-c$ the matrix $\Sw$ is on the edge of positive definiteness, so
+\texttt{chol} sometimes reports failure (its second output \texttt{p} is non-zero).
+Our code catches that and adds a small ridge scaled to the size of $\Sw$:
+\begin{lstlisting}
+if p ~= 0
+    ridge = 1e-6 * trace(Sw) / m;
+    Sw = Sw + ridge * eye(m);
+    [R, p2] = chol(Sw);
+    info.usedReg = 1;
+end
+\end{lstlisting}
+The scaling matters: a bare \texttt{1e-6 * eye(m)} would be enormous relative to
+$\Sw$ on one dataset and negligible on another, because the pixel values and
+sample counts differ. Using $\tr(\Sw)/m$, the \emph{average} eigenvalue, makes the
+ridge dimensionally consistent. The script reports whether this path was taken, so
+we never silently regularise without knowing.
+\end{gotcha}
+
+\begin{observation}[The solver is verified against MATLAB's own]
+Our explicit whitening is cross-checked against the packaged call
+\texttt{eig(Sb, Sw, 'chol')} on every configuration. The relative difference in the
+eigenvalues is between $2.5\times10^{-16}$ and $7.8\times10^{-16}$, i.e.\ machine
+precision. We kept the explicit version in the code because every step of it is
+visible and defensible; the packaged version is kept only as the check.
+\end{observation}
+
+\subsection{Fisherfaces are not orthogonal}
+
+\begin{theorem}
+The generalised eigenvectors satisfy $w_i^{\!\top}\Sw w_j = 0$ for $\lambda_i\neq\lambda_j$.
+In general $w_i^{\!\top} w_j \neq 0$.
+\end{theorem}
+\begin{proof}
+The whitened eigenvectors $z_i$ of the symmetric matrix $M$ are orthonormal:
+$z_i^{\!\top} z_j=\delta_{ij}$. Since $w_i = R^{-1}z_i$, i.e.\ $z_i = Rw_i$,
+\[
+  \delta_{ij} = z_i^{\!\top} z_j = (Rw_i)^{\!\top}(Rw_j) = w_i^{\!\top} R^{\!\top} R w_j = w_i^{\!\top}\Sw w_j .
+\]
+So they are orthonormal with respect to the inner product defined by $\Sw$, not the
+Euclidean one. Euclidean orthogonality would require $R^{\!\top} R=I$, i.e.\ $\Sw=I$,
+which is false in general.
+\end{proof}
+
+\begin{observation}
+Section S12(c) measures both Gram matrices on ORL-32 and reports the fraction of
+their energy sitting off the diagonal:
+\begin{lstlisting}
+  (c) off-diagonal energy of W'W      (Euclidean) = 4.986e-01
+      off-diagonal energy of W'S_W W  (S_W-inner) = 3.787e-13
+\end{lstlisting}
+Half the energy of $W^{\!\top} W$ is off-diagonal -- the Fisherfaces are nowhere near
+Euclidean-orthogonal -- while $W^{\!\top}\Sw W$ is diagonal to machine precision. This
+is a favourite exam trap: \textbf{eigenfaces are orthonormal, Fisherfaces are
+not.}
+\end{observation}
+
+\section{Alternatives we did not use, and why}
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[Regularised (ridge) LDA: $\Sw+\varepsilon I$.]
+  Add a small multiple of the identity to make $\Sw$ invertible directly in pixel
+  space. Simple and effective, and it is what we fall back to when \texttt{chol}
+  fails. We did not make it the main method because the result depends on
+  $\varepsilon$, which has to be tuned, and because in pixel space the matrix is
+  still $32256^2$ -- it fixes the rank problem but not the size problem.
+\item[Pseudo-inverse: $\Sw^{+}\Sb$.]
+  \texttt{pinv} ignores the null space instead of inverting it. It runs without
+  complaint, which is exactly the danger: it quietly discards the directions where
+  classes are tightest, which are often the most discriminative ones.
+\item[Null-space LDA.]
+  Deliberately works \emph{inside} the null space of $\Sw$, where within-class
+  scatter is zero, and maximises $\Sb$ there. Elegant, and strong when $N$ is very
+  small, but it throws away everything outside the null space.
+\item[Direct LDA (Yu \& Yang).]
+  Diagonalises $\Sb$ first and discards \emph{its} null space (which carries no
+  discriminative information by definition), then handles $\Sw$. Avoids the PCA
+  stage entirely.
+\item[Nearest class centroid instead of nearest neighbour.]
+  Compare the projected test image to each class \emph{mean} ($c$ comparisons)
+  instead of to every training image ($N$ comparisons). Much faster and more robust
+  to outliers, but it cannot represent a class with more than one mode (e.g.\ a
+  person with and without glasses). We used nearest neighbour to match both the
+  paper and our HW3 baseline.
+\item[Mahalanobis distance in the projected space.]
+  Weight each discriminant axis by $1/\sqrt{\lambda_i}$ rather than treating all
+  axes equally. Reasonable, but it re-amplifies the poorly estimated small-$\lambda$
+  directions, which is the very problem we are trying to avoid.
+\end{description}
+
+\part{The code}
+
+\section{MATLAB syntax used in this project}
+
+This section exists because we are not fluent in MATLAB and must be able to explain
+every construct in the script. Each entry says what it does and what goes wrong if
+it is misused.
+
+\subsection{Arrays and indexing}
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[\texttt{im(:)}] Flattens any array into a single column vector, reading
+  \textbf{column by column} (column-major order). For a $112\times92$ image the
+  result is $10304\times1$: first all of column 1, then all of column 2, and so on.
+  MATLAB stores arrays in this order internally, so this is free -- it is a
+  reinterpretation, not a copy.
+\item[\texttt{reshape(v, 112, 92)}] The exact inverse. The product of the new
+  dimensions must equal \texttt{numel(v)} or it errors. Swapping the two numbers
+  does \emph{not} error -- it silently produces a scrambled image, which is why the
+  height/width pair must always travel together.
+\item[\texttt{X(:, i)}] Column $i$ of \texttt{X}: in our layout, image $i$.
+  \texttt{X(i, :)} would be row $i$: pixel $i$ across all images.
+\item[\texttt{X(4:k, :)}] Rows $4$ through $k$, all columns. This is how we drop
+  the top three eigencoefficients -- we keep rows $4\ldots k$ of the projected
+  data.
+\item[\texttt{Y(:, y == i)}] \textbf{Logical indexing.} \texttt{y == i} produces a
+  vector of \texttt{true}/\texttt{false}, and using it as an index keeps only the
+  columns where it is \texttt{true}. This is how we select one class's images.
+\item[\texttt{find(y == i)}] Returns the integer \emph{positions} where the
+  condition holds, rather than a logical mask. We use it when we need the indices
+  themselves (e.g.\ to write back into the same columns).
+\item[\texttt{end}] Inside an index, the last valid position: \texttt{lambda(k+1:end)}
+  is ``from $k+1$ to the end''. \texttt{yaleFolders\{end+1\} = ...} appends.
+\item[\texttt{zeros(d, N)}] Preallocation. Creating the array once and filling it is
+  far faster than growing it, because growing forces MATLAB to allocate a new block
+  and copy everything on \emph{every} iteration.
+\end{description}
+
+\subsection{Implicit expansion (broadcasting)}
+
+\texttt{trainImages - meanFace} subtracts a $d\times1$ column from a $d\times N$
+matrix. MATLAB automatically replicates the column across all $N$ columns. This is
+\emph{implicit expansion}, available since R2016b; older code needed
+\texttt{bsxfun} or \texttt{repmat}.
+
+\begin{gotcha}
+Implicit expansion triggers whenever a dimension is $1$, which makes shape mistakes
+silent rather than loud. If \texttt{meanFace} were accidentally $1\times d$ (a row)
+instead of $d\times1$, then \texttt{X - meanFace} would not error -- it would
+expand in the \emph{wrong direction} and build a $d\times d$ matrix. For Yale that
+is an attempt to allocate $8.3$~GB. Always check orientation with
+\texttt{size()} when something is unexpectedly slow or out of memory.
+\end{gotcha}
+
+Also note the difference between the two means we use:
+\begin{itemize}[nosep]
+\item \texttt{mean(X, 2)} averages along dimension 2 (across columns) $\Rightarrow$
+  a $d\times1$ \textbf{mean image}. This is the mean face.
+\item \texttt{mean(X, 1)} averages along dimension 1 (down each column)
+  $\Rightarrow$ a $1\times N$ row of \textbf{per-image brightness}. This is what
+  \texttt{normCols} removes to build the correlation baseline.
+\end{itemize}
+Confusing these two is one of the easiest ways to break this code, and neither
+errors.
+
+\subsection{Eigenvalues and linear solves}
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[\texttt{e = eig(L)}] One output: a \emph{vector} of eigenvalues.
+\item[\texttt{[V, D] = eig(L)}] Two outputs: eigenvectors in the columns of
+  \texttt{V}, eigenvalues on the \emph{diagonal} of the matrix \texttt{D}. Hence
+  \texttt{diag(D)} to get them as a vector. (\texttt{diag} is its own inverse in
+  spirit: given a matrix it extracts the diagonal, given a vector it builds a
+  diagonal matrix.)
+\item[\texttt{eig(Sb, Sw)}] Two \emph{inputs}: solves the generalised problem
+  $\Sb w=\lambda\Sw w$. Adding \texttt{'chol'} tells MATLAB to use the Cholesky
+  method, valid because $\Sw$ is symmetric positive definite.
+\item[\texttt{[R, p] = chol(Sw)}] Cholesky factor, $\Sw = R^{\!\top} R$ with $R$ upper
+  triangular. \textbf{The second output is the important one}: \texttt{p == 0} means
+  success, \texttt{p > 0} means the matrix is not positive definite. Calling
+  \texttt{chol} with one output instead \emph{throws an error} on failure, which
+  would abort the whole sweep -- so we always ask for \texttt{p} and handle it.
+\item[\texttt{A \textbackslash\ b}] Solves $Ax=b$. \texttt{A / B} solves $xB=A$,
+  i.e.\ $AB^{-1}$. Both are preferred over \texttt{inv(A)*b}: faster, more
+  accurate, and they never materialise an inverse. For a triangular matrix like
+  $R$, MATLAB detects the structure and just back-substitutes.
+\item[\texttt{norm(v)}] Euclidean length of a vector.
+  \texttt{norm(M, 'fro')} is the Frobenius norm of a matrix, $\sqrt{\sum_{ij}M_{ij}^2}$,
+  which is what we use for residual checks.
+\item[\texttt{rank(M)}, \texttt{cond(M)}] Both computed via the SVD. \texttt{rank}
+  counts singular values above a tolerance (by default
+  \texttt{max(size(M))*eps(norm(M))}) -- so it is a \emph{numerical} rank and
+  depends on that tolerance. \texttt{cond} is $\sigma_{\max}/\sigma_{\min}$.
+\item[\texttt{[\textasciitilde, best] = min(d)}] The tilde discards the first
+  output (the minimum value); we only want \texttt{best}, its index. This is how
+  nearest-neighbour finds the matching training image.
+\item[\texttt{sum(M, 1)}] Sums down each column, giving one number per column.
+  In
+  \begin{center}\texttt{sum((trainProj - testProj(:,i)).\^{}2, 1)}\end{center}
+  this turns a matrix of differences into a row of squared distances.
+  \texttt{.\^{}} is \emph{element-wise} power; plain \texttt{\^{}} would be a
+  matrix power and is wrong here.
+\end{description}
+
+\subsection{Files, output and figures}
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[\texttt{dir(pattern)}] Returns a struct array with fields \texttt{name},
+  \texttt{isdir}, \texttt{bytes} and more. Access with \texttt{files(j).name}.
+  \textbf{It sorts alphabetically, not numerically} -- the source of two separate
+  gotchas in this project (Section~\ref{sec:splitgotchas}). It also returns
+  \texttt{'.'} and \texttt{'..'} when listing a directory, which must be filtered;
+  we do it with \texttt{dy(i).name(1) \textasciitilde= '.'}, which also skips
+  hidden files.
+\item[\texttt{sscanf(s, '\%d')}] Reads the leading integer out of a string. We use
+  it to recover the numeric order of ORL's filenames. It returns empty if the
+  string does not \emph{start} with a number, which is why it is only safe for ORL
+  (\texttt{'1.pgm'}) and not Yale (\texttt{'yaleB01\_...'}).
+\item[\texttt{imread}] Reads the image. For a PGM it returns a \texttt{uint8}
+  matrix, so we wrap it in \texttt{double()} immediately. \textbf{This is not
+  optional}: \texttt{uint8} arithmetic in MATLAB saturates at $0$ and $255$ and
+  rounds to integers, so mean subtraction on \texttt{uint8} data would clip every
+  negative value to zero and destroy the data silently.
+\item[\texttt{fprintf('\%.1f ', v)}] If \texttt{v} is a vector, the format string
+  is \emph{reused} until the vector is exhausted -- which is how one call prints a
+  whole row of recognition rates. \texttt{\%d} integer, \texttt{\%f} fixed point,
+  \texttt{\%e} exponential, \texttt{\%.3e} three decimals in exponential form,
+  \texttt{\%\%} a literal percent sign.
+\item[\texttt{figure('Visible','off')}] Builds the figure without opening a window,
+  which is required under \texttt{matlab -batch} (there is no display).
+  \texttt{saveas(gcf, path)} writes it; \texttt{gcf} is ``get current figure''.
+\item[\texttt{imagesc}] Displays a matrix as an image, \emph{scaling} its values to
+  the full colour range. This is what we want for eigenfaces, whose entries are
+  small positive and negative numbers with no meaningful absolute scale.
+  \texttt{image} would not rescale and would show almost-black pictures.
+\item[\texttt{colormap gray}] Without it, MATLAB's default colour map renders the
+  greyscale faces in blue and yellow.
+\item[\texttt{axis image off}] \texttt{image} forces square pixels so faces are not
+  stretched; \texttt{off} hides the tick marks.
+\item[\texttt{yyaxis left/right}] Two different $y$ scales on one plot, used in the
+  $m$-sweep figure to show a recognition rate and a condition number together.
+\end{description}
+
+\subsection{Program structure}
+
+\begin{description}[leftmargin=*,style=nextline]
+\item[\texttt{\%\%}] Starts a new ``section'' (a code cell). Purely organisational,
+  but it lets us run one experiment at a time in the editor.
+\item[Local functions] A script may define functions, but \textbf{only after all
+  executable code}. That is why every helper in our file sits at the bottom. They
+  see only their own arguments -- no access to the script's variables -- which is
+  exactly what we want, since it makes each one independently testable.
+\item[\texttt{clear U A Ate Xtr Xte;}] Frees large arrays. With Yale, \texttt{X} and
+  \texttt{U} are about 392~MB each, so without this the five configurations would
+  accumulate several gigabytes.
+\item[\texttt{rng(0)}] Seeds the random number generator. Without it the ``random
+  split'' experiments would give different answers on every run and we could not
+  quote stable numbers.
+\item[\texttt{exist('fitcdiscr','file') == 2}] Tests whether a function is
+  available before calling it, so the script still runs on a machine without the
+  Statistics Toolbox (ours is such a machine).
+\item[\texttt{\%\#ok<SAGROW>}] Suppresses the editor's ``this array grows in a
+  loop'' warning, where we have accepted the cost deliberately (38 iterations).
+\end{description}
+
+\section{The two split gotchas}
+\label{sec:splitgotchas}
+
+Both come from the same root cause -- \texttt{dir} sorts \textbf{alphabetically} --
+and neither produces any error message.
+
+\subsection{ORL: the training images are not 1--6}
+
+\texttt{ORL/s1/} contains \texttt{1.pgm, 2.pgm, \ldots, 10.pgm}. Sorted as text,
+\texttt{'10.pgm'} comes after \texttt{'1.pgm'} but \emph{before} \texttt{'2.pgm'},
+because the comparison is character by character and \texttt{'0' < '2'}. So
+\texttt{dir} returns
+\[
+  1,\;10,\;2,\;3,\;4,\;5,\;6,\;7,\;8,\;9 .
+\]
+HW3 took ``the first 6'' as training, which therefore means images
+$\{1,10,2,3,4,5\}$, with $\{6,7,8,9\}$ as test -- \emph{not} the intended 1--6 /
+7--10 split.
+
+This is not a disaster (it is still a clean, disjoint split, and all 10 images are
+used), but it is not what the code appears to say. We handle it by offering both:
+\texttt{'hw3'} mode reproduces the original order exactly, so our baseline matches
+HW3 to the digit, and \texttt{'numeric'} mode sorts properly via \texttt{sscanf}.
+Comparing the two is then an honest measurement of how much the ordering mattered.
+
+\subsection{Yale: the lexicographic split is badly biased}
+
+This one does real damage. Yale filenames encode the light source position as an
+azimuth and an elevation, in the form \texttt{A<az>E<el>} with explicit signs. For
+example,
+\begin{center}
+\texttt{yaleB01\_P00A+035E+20.pgm} \quad is azimuth $+35^\circ$, elevation $+20^\circ$.
+\end{center}
+Sorted as text, \textbf{every} \texttt{A+} file precedes \textbf{every}
+\texttt{A-} file, because \texttt{'+'} (ASCII 43) sorts before \texttt{'-'}
+(ASCII 45).
+
+Counting the files for one subject: there are $35$ images with $\texttt{A+}$ and
+$29$ with $\texttt{A-}$. HW3 took the first $40$ as training, so the training set
+is
+\begin{center}
+all $35$ positive-azimuth images $+$ the $5$ smallest negative ones
+($\texttt{A-005E+10}$, $\texttt{A-005E-10}$, $\texttt{A-010E+00}$,
+ $\texttt{A-010E-20}$, $\texttt{A-015E+20}$),
+\end{center}
+and the test set is the remaining $24$ images, \emph{all} at azimuth
+$-020^\circ$ to $-130^\circ$ -- the most extreme lighting, and mirrored in sign
+from almost everything the classifier has seen.
+
+So the test set is systematically harder than the training set and drawn from a
+different distribution. This is not a fair estimate of recognition accuracy; it is
+a measurement of extrapolation to unseen lighting. We quantify the effect in
+Section~\ref{sec:splitbias} by adding a random split as a control, and report both.
+
+\part{Experiments and results}
+
+\section{Protocol}
+
+All numbers below come from one run of \texttt{fisherfaces\_project.m} and are
+recorded in \texttt{run\_log.txt}. Four methods are compared:
+\begin{enumerate}[nosep,label=\arabic*.]
+\item \textbf{Correlation} -- nearest neighbour on raw pixels, each image
+  normalised to zero mean and unit norm. No subspace at all.
+\item \textbf{Eigenfaces} -- PCA, nearest neighbour in the top-$k$ space, with $k$
+  swept over
+  \[ k \in \{1,2,3,5,10,15,20,30,50,75,100,150,170\}. \]
+\item \textbf{Eigenfaces without the first three} -- same, dropping components
+  $1,2,3$.
+\item \textbf{Fisherfaces} -- PCA to $m=N-c$, then LDA, keeping $c-1$ directions.
+\end{enumerate}
+Classification is always 1-nearest-neighbour with squared Euclidean distance, and
+test images are always centred using the \emph{training} mean.
+
+\section{Main results}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{lrrrrr}
+\toprule
+ & & \multicolumn{2}{c}{Eigenfaces} & Eigenfaces & \\
+\cmidrule(lr){3-4}
+Dataset & Correlation & best $k$ & at $k=c-1$ & w/o top 3 & \textbf{Fisherfaces} \\
+\midrule
+ORL-32 (HW3 split)   & 91.4 & 95.3 & 94.5 & 87.5 & 90.6 \\
+ORL-40 (HW3 split)   & 91.2 & 93.8 & 94.4 & 86.9 & 84.4 \\
+ORL-32 (numeric split) & 93.0 & 95.3 & 95.3 & 89.1 & 93.0 \\
+Yale-38 (HW3 split)  & 43.0 & 34.2 & 29.5 & 58.7 & \textbf{67.2} \\
+Yale-38 (random split) & 85.2 & 70.0 & 50.2 & 89.0 & \textbf{97.1} \\
+\bottomrule
+\end{tabular}
+\caption{Recognition rate (\%). Fisherfaces always uses exactly $c-1$ features
+($31$, $39$, $31$, $37$, $37$ respectively), which is why the matched-dimension
+Eigenfaces column is the fairer comparison.}
+\label{tab:main}
+\end{table}
+
+\begin{observation}[The paper's central claim is reproduced, and strongly]
+On Yale, where the nuisance is illumination, Fisherfaces beats Eigenfaces
+decisively: $\mathbf{67.2\%}$ against $\mathbf{34.2\%}$ on the HW3 split (a factor
+of $1.96$) and $\mathbf{97.1\%}$ against $\mathbf{70.0\%}$ on the random split (a
+factor of $1.39$, and an error rate cut from $30.0\%$ to $2.9\%$ -- a tenfold
+reduction). Against the
+matched-dimension Eigenfaces ($29.5\%$ and $50.2\%$) the gap is larger still.
+Fisherfaces also beats the ``drop the top 3'' trick in both cases
+($67.2$ vs $58.7$, $97.1$ vs $89.0$), which is the expected ordering: dropping
+three components assumes the nuisance is exactly 3-dimensional and identical for
+everyone, whereas LDA \emph{learns} which directions are nuisance from the labels.
+\end{observation}
+
+\begin{observation}[But on ORL, Fisherfaces \emph{loses}]
+On ORL-32 Fisherfaces gets $90.6\%$ against Eigenfaces' $95.3\%$, and on ORL-40 it
+is worse again, $84.4\%$ against $93.8\%$. We did not tune this away, because the
+explanation is exactly the theory in Theorem~\ref{thm:rankSw}.
+
+ORL has only $n_i=6$ images per person, so each class contributes $n_i-1=5$
+directions to $\Sw$. We are estimating a $160\times160$ within-class scatter matrix
+from $192-32=160$ degrees of freedom -- the number of parameters we need is of order
+$160^2/2 = 12800$, and we have $160$ samples' worth of information. The estimate is
+hopeless, and LDA then \emph{trusts} it by inverting it.
+
+Yale has $n_i=40$, i.e.\ $39$ directions per class, and there Fisherfaces wins
+comfortably. The contrast between the two databases is not a contradiction; it is
+the small-sample-size effect, measured.
+
+Note also the secondary evidence inside ORL: going from $32$ to $40$ subjects makes
+Fisherfaces \emph{worse} ($90.6\to84.4$) while barely moving Eigenfaces
+($95.3\to93.8$). More classes means more means to estimate from the same five
+images each, so $\Sb$ and $\Sw$ both get noisier. Eigenfaces, which never inverts
+anything, is far less sensitive.
+\end{observation}
+
+\section{The Yale split bias}
+\label{sec:splitbias}
+
+Section~\ref{sec:splitgotchas} predicted that HW3's lexicographic Yale split trains
+almost entirely on positive-azimuth lighting and tests on extreme negative-azimuth
+lighting. Table~\ref{tab:main} lets us measure the size of that effect: simply
+randomising the split, with the \emph{same} number of training images, changes
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Method & HW3 split & random split \\
+\midrule
+Correlation            & 43.0 & 85.2 \\
+Eigenfaces (best $k$)  & 34.2 & 70.0 \\
+Eigenfaces w/o top 3   & 58.7 & 89.0 \\
+Fisherfaces            & 67.2 & 97.1 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{observation}
+Every method roughly doubles. \textbf{So most of the ``difficulty'' of Yale in our
+HW3 baseline was an artefact of the split, not a property of the database.} The
+$34.2\%$ figure measures extrapolation to lighting directions never seen in
+training, which is a legitimate thing to measure but is not what ``recognition
+rate'' normally means.
+
+Two things are worth stressing. First, the \emph{ranking} of the methods is
+identical under both splits, so the paper's qualitative claim does not depend on
+this at all -- which is why we are comfortable reporting both. Second, the
+Fisherfaces advantage is \emph{larger} in relative terms on the biased split
+($1.96\times$ vs $1.39\times$), i.e.\ the supervised method degrades more
+gracefully when the test lighting is unseen.
+\end{observation}
+
+\section{Sweeping the PCA dimension \texorpdfstring{$m$}{m}}
+\label{sec:msweep}
+
+This is our most interesting result, because it contradicts the recipe in the paper.
+
+\begin{table}[htbp]
+\centering
+\setlength{\tabcolsep}{4.2pt}
+\begin{tabular}{rrrr@{\hskip 1.2em}rrrr}
+\toprule
+\multicolumn{4}{c}{\textbf{ORL-32} ($N=192$, $c=32$, $N-c=160$)} &
+\multicolumn{4}{c}{\textbf{Yale-38 random} ($N=1520$, $c=38$, $N-c=1482$)} \\
+\cmidrule(lr){1-4}\cmidrule(lr){5-8}
+$m$ & rate\% & $\rank\Sw$ & $\kappa(\Sw)$ & $m$ & rate\% & $\rank\Sw$ & $\kappa(\Sw)$ \\
+\midrule
+ 31 & 94.5 &  31 & $6.49\times10^{1}$ &   37 & 82.1 &   37 & $4.84\times10^{2}$ \\
+ 40 & 93.0 &  40 & $7.73\times10^{1}$ &   60 & 89.3 &   60 & $1.03\times10^{3}$ \\
+ 60 & \textbf{95.3} &  60 & $1.75\times10^{2}$ &  100 & 94.2 &  100 & $2.51\times10^{3}$ \\
+ 80 & 91.4 &  80 & $3.73\times10^{2}$ &  200 & 96.0 &  200 & $8.57\times10^{3}$ \\
+100 & 91.4 & 100 & $6.40\times10^{2}$ &  400 & 96.6 &  400 & $3.73\times10^{4}$ \\
+120 & 90.6 & 120 & $1.69\times10^{3}$ &  700 & 96.9 &  700 & $1.63\times10^{5}$ \\
+140 & 89.1 & 140 & $5.80\times10^{3}$ & 1000 & \textbf{97.0} & 1000 & $7.05\times10^{5}$ \\
+160 & 90.6 & 160 & $7.85\times10^{7}$ & 1200 & 96.8 & 1200 & $2.55\times10^{6}$ \\
+    &      &     &                    & 1482 & 95.7 & 1482 & $2.23\times10^{11}$ \\
+\bottomrule
+\end{tabular}
+\caption{Recognition rate and the condition number of the projected $\Sw$ as the
+PCA dimension $m$ varies. The last row of each block is the paper's choice
+$m=N-c$.}
+\label{tab:msweep}
+\end{table}
+
+\begin{observation}[$m=N-c$ is not the best choice, on either database]
+\leavevmode
+\begin{itemize}[nosep]
+\item ORL-32: best is $m=60$ at $\mathbf{95.3\%}$; the paper's $m=160$ gives
+  $\mathbf{90.6\%}$. Choosing $m$ well recovers all of the gap to Eigenfaces --
+  at $m=60$, Fisherfaces \emph{ties} the best Eigenfaces result.
+\item Yale-38: best is $m=1000$ at $\mathbf{97.0\%}$; the paper's $m=1482$ gives
+  $\mathbf{95.7\%}$.
+\end{itemize}
+\end{observation}
+
+\begin{observation}[The condition number explains why]
+Look at the last two rows of each block. On ORL, $\kappa(\Sw)$ jumps from
+$5.8\times10^{3}$ at $m=140$ to $7.8\times10^{7}$ at $m=160$ -- four orders of
+magnitude for the last twenty dimensions. On Yale it jumps from $2.6\times10^{6}$
+at $m=1200$ to $2.2\times10^{11}$ at $m=1482$.
+
+Double precision carries about $16$ significant digits, so a condition number of
+$10^{11}$ means the smallest eigenvalues of $\Sw$ retain roughly $16-11=5$ correct
+digits, and the directions associated with them are mostly noise. $\Sw^{-1}$
+divides by exactly those eigenvalues. This is the ``zero slack'' argument of
+Section~\ref{sec:zeroslack}, measured: the final few dimensions that $m=N-c$ insists on keeping
+are the worst-estimated ones in the entire problem, and including them costs
+accuracy.
+\end{observation}
+
+\begin{gotcha}[The projected $\Sw$ can lose rank that the unprojected one had]
+In Table~\ref{tab:main} the Yale HW3-split row reports $\rank(\Sw)=1481$ at
+$m=1482$, even though section S5 measured $\rank(\Sw)=1482$ in \emph{pixel} space
+for the same training set. Both numbers are right, and the difference is
+instructive.
+
+PCA gives us at most $N-1=1519$ directions with non-zero total scatter, and we keep
+the top $m=1482$ of them. The column space of $\Sw$ is a $1482$-dimensional
+subspace of that $1519$-dimensional space -- but there is no guarantee it lies
+\emph{inside} the particular $1482$ directions PCA ranked highest. When it does
+not, projecting loses rank. We observe the loss on the HW3 split and not on the
+random split, so it is data-dependent.
+
+The practical consequence: at $m=N-c$ the projected $\Sw$ is not even reliably
+invertible, which is the whole justification for choosing $m=N-c$ in the first
+place. Yet another reason to prefer a smaller $m$.
+\end{gotcha}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{figs/s9_m_sweep.png}
+\caption{S9: recognition rate (left axis) and $\kappa(\Sw)$ on a log scale (right
+axis) against $m$. The conditioning blow-up as $m\to N-c$ is the mechanism behind
+the accuracy drop.}
+\label{fig:msweep}
+\end{figure}
+
+\section{Sweeping the number of training images per subject}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{rrrrrr}
+\toprule
+$n_i$ & $N$ & $N-c$ & Correlation & Eigenfaces (best $k$) & \textbf{Fisherfaces} \\
+\midrule
+ 2 &   76 &   38 & 26.6 & 19.9 & \textbf{43.0} \\
+ 3 &  114 &   76 & 29.9 & 22.2 & \textbf{51.5} \\
+ 5 &  190 &  152 & 42.4 & 34.3 & \textbf{69.6} \\
+10 &  380 &  342 & 57.7 & 43.3 & \textbf{76.9} \\
+20 &  760 &  722 & 72.1 & 55.7 & \textbf{89.4} \\
+32 & 1216 & 1178 & 80.8 & 64.1 & \textbf{91.7} \\
+40 & 1520 & 1482 & 82.7 & 67.3 & \textbf{94.2} \\
+\bottomrule
+\end{tabular}
+\caption{Yale, random split, varying training images per subject. $m=N-c$ throughout.}
+\label{tab:nsweep}
+\end{table}
+
+\begin{observation}
+Fisherfaces beats Eigenfaces at \emph{every} training-set size, including $n_i=2$
+where $\Sw$ gets only one degree of freedom per class ($43.0\%$ vs $19.9\%$). We
+had half-expected Fisherfaces to lose at the smallest $n_i$, as it does on ORL. It
+does not, and the reason is instructive: on Yale the nuisance (illumination) is so
+dominant that even a badly estimated $\Sw$ points roughly in the right direction,
+and suppressing it approximately is still far better than not suppressing it at
+all. On ORL there is no such dominant nuisance to suppress, so a noisy $\Sw$ buys
+nothing and the inversion only adds variance.
+
+The relative advantage does shrink as data grows -- $2.16\times$ at $n_i=2$ down to
+$1.40\times$ at $n_i=40$ -- which is the expected convergence: with enough data,
+PCA's leading components eventually separate identity from lighting too.
+\end{observation}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.75\textwidth]{figs/s10_n_sweep.png}
+\caption{S10: all three methods improve with more training images, and the
+Fisherfaces curve sits above the others throughout.}
+\label{fig:nsweep}
+\end{figure}
+
+\section{What the basis images look like}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.93\textwidth]{figs/s11_yale_eigen_vs_fisher.png}
+\caption{S11, Yale. Top row: the first eight eigenfaces. Bottom row: the first
+eight Fisherfaces.}
+\label{fig:basis}
+\end{figure}
+
+\begin{observation}
+The two sets of images look completely different, and the difference is exactly
+what the theory predicts.
+
+\textbf{Eigenfaces} are smooth and face-like, with large soft gradients across the
+whole image. They are the directions of greatest variance, and the leading ones are
+dominated by broad left-right and top-bottom lighting gradients -- you can
+practically read the light source position off the first few.
+
+\textbf{Fisherfaces} are high-frequency, noisy and much less recognisable as faces.
+This is not a bug. They are optimised to \emph{separate identities}, not to
+reconstruct images, so they emphasise small localised differences between people
+and actively cancel the large lighting directions. A Fisherface is closer to a
+difference-of-faces template than to a face.
+
+This also explains why Fisherfaces are useless for compression: there is no
+reconstruction guarantee analogous to Theorem~\ref{thm:recon}, because LDA never
+optimised for one.
+\end{observation}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.42\textwidth]{figs/s11_orl_eigenfaces.png}
+\hfill
+\includegraphics[width=0.42\textwidth]{figs/s11_orl_fisherfaces.png}
+\caption{S11, ORL. Left: the first 25 eigenfaces. Right: the first 25 Fisherfaces
+(there are exactly $c-1=31$ in total). The same contrast as Figure~\ref{fig:basis}
+appears on the second database: eigenfaces are smooth and face-like, Fisherfaces
+are high-frequency. ORL has little lighting variation, so its leading eigenfaces
+show pose and expression changes rather than lighting gradients -- which is why
+discarding them hurts here and helps on Yale.}
+\label{fig:orlbasis}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.30\textwidth]{figs/s11_orl_meanface.png}
+\caption{S11: the ORL mean face $\mu$, subtracted from every image before PCA. It
+is recognisably a face because it averages what all the subjects have in common;
+PCA then describes how individuals deviate from it.}
+\label{fig:meanface}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{figs/s11_rate_curves.png}
+\caption{S11: recognition rate against $k$ for the two Eigenfaces variants, with
+the Fisherfaces result (a single number, since it always uses $c-1$ features) drawn
+as a dashed line. Left: ORL-32, where Fisherfaces sits below the Eigenfaces curve.
+Right: Yale-38, where it sits well above both.}
+\label{fig:curves}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{figs/s11_orl_reconstruction.png}
+\caption{S11: PCA reconstruction of one ORL face as $k$ grows, the visual
+counterpart of Theorem~\ref{thm:recon}. By $k=50$ the identity is clear; the
+remaining components add fine texture.}
+\label{fig:recon}
+\end{figure}
+
+\section{Summary of what we verified}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Check & Where & Result \\
+\midrule
+HW3 eigenfaces numbers reproduced   & S3/S4 & exact to all printed digits \\
+$E_k=\sum_{i>k}\lambda_i$           & S3/S4 & agrees to 4 decimals \\
+$\St=\Sb+\Sw$                       & S5--S8 & $\le 8.6\times10^{-16}$ relative \\
+$\rank(\Sw)\le N-c$                 & S5 & $1482 = 1482$, bound met \\
+no duplicate training images        & S5 & $0$ pairs (after cleaning) \\
+our solver vs \texttt{eig(Sb,Sw,'chol')} & S6--S8 & $\le 7.8\times10^{-16}$ relative \\
+eigenfaces orthonormal              & S12(a) & $\|U^{\!\top} U-I\|_F=9.1\times10^{-14}$ \\
+\texttt{eig} route vs \texttt{svd} route & S12(b) & $|u^{\!\top} u'|=1.000000$ for top 10 \\
+Fisherfaces $\Sw$-orthogonal        & S12(c) & off-diagonal $3.8\times10^{-13}$ \\
+Fisherfaces \emph{not} Euclidean-orthogonal & S12(c) & off-diagonal $0.499$ \\
+$\rank(\Sb)=c-1$                    & S12(d) & $31 = 31$ \\
+closed-form $w$ maximises $J$       & S1 & beats a 6283-direction grid search \\
+LDA error vs Bayes error            & S1 & $1.70\%$ vs $2.28\%$ theoretical \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Conclusions}
+
+\begin{enumerate}[leftmargin=*]
+\item \textbf{The paper's central claim holds.} Where the within-class nuisance is
+  large and structured -- illumination on Yale -- supervised LDA beats unsupervised
+  PCA decisively, $67.2\%$ vs $34.2\%$ and $97.1\%$ vs $70.0\%$.
+\item \textbf{It is a claim about nuisance structure, not about LDA being better.}
+  On ORL, where variation is pose and expression and only six images per person are
+  available, Fisherfaces \emph{loses} to Eigenfaces. The deciding quantity is the
+  per-class degrees of freedom $n_i-1$ available to estimate $\Sw$.
+\item \textbf{The $m=N-c$ prescription is the weakest part of the recipe.} It is
+  the largest $m$ making $\Sw$ invertible, but it is the \emph{worst-conditioned}
+  such choice, and on both databases a smaller $m$ does better ($95.3$ vs $90.6$ on
+  ORL, $97.0$ vs $95.7$ on Yale). On one split it does not even deliver the
+  invertibility it was chosen for.
+\item \textbf{Dropping the first three components is a weaker version of the same
+  idea.} It hard-codes the assumption that the nuisance is a fixed 3-D subspace;
+  LDA learns the nuisance from labels instead, and does better
+  ($67.2$ vs $58.7$, $97.1$ vs $89.0$).
+\item \textbf{Experimental protocol mattered as much as the algorithm.} The
+  lexicographic Yale split suppressed every method's score by roughly a factor of
+  two, and a duplicated file in the database was visible as a one-unit rank
+  deficiency. Both were found by checking numbers against theory rather than by
+  looking at recognition rates.
+\end{enumerate}
+
+\part{Question bank}
+
+Short answers to the questions this project most invites. Each points back to the
+section with the full argument.
+
+\section{Theory}
+
+\begin{description}[leftmargin=*,style=nextline]
+
+\item[Why subtract the mean before PCA?]
+PCA finds directions of maximum \emph{variance}, which is spread about the centre.
+Without centring, the first component points at the mean face itself -- the
+direction in which the raw vectors are largest -- which describes what faces have
+in common rather than how they differ. (Section~\ref{sec:centre})
+
+\item[Why does the $L=A^{\!\top}\!A$ trick work?]
+If $Lv=\lambda v$ then $AA^{\!\top}(Av)=A(A^{\!\top}\!Av)=\lambda(Av)$, so $Av$ is an
+eigenvector of $AA^{\!\top}$ with the same eigenvalue. We get the eigenvectors of a
+$32256\times32256$ matrix from a $1520\times1520$ one. (Theorem~\ref{thm:gram})
+
+\item[When is that trick a bad idea?]
+When $N > d$. It trades an $O(d^3)$ problem for an $O(N^3)$ one, so it only helps
+while $N\ll d$. On MNIST ($d=784$, $N=60000$) it would be far slower than forming
+the covariance directly.
+
+\item[Why must you renormalise $Av$?]
+$\|Av\|=\sqrt{\lambda}$, not $1$. Without renormalising, $U^{\!\top} U\ne I$, the
+reconstruction formula stops being an orthogonal projection, and
+Theorem~\ref{thm:recon} fails.
+
+\item[How many eigenfaces can you possibly get from $N$ images?]
+At most $N-1$. The mean-subtracted columns satisfy $\sum_j a_j = 0$, one linear
+dependency, so $\rank(A)\le N-1$. (Corollary~\ref{cor:rank})
+
+\item[What exactly is the reconstruction error for $k$ components?]
+The sum of the discarded eigenvalues, $\sum_{i>k}\lambda_i$. Proved by expanding in
+the eigenbasis and applying Pythagoras twice. (Theorem~\ref{thm:recon})
+
+\item[Why does dropping the first three eigenfaces help on Yale?]
+For a convex Lambertian surface with no shadowing, every image of one face under
+any lighting is $B\mathbf{s}$ with $B\in\R^{d\times3}$, so lighting variation spans
+only a 3-D subspace. That variation is larger than the differences between people,
+so PCA spends its leading components on it. (Theorem~\ref{thm:cone})
+
+\item[Then why does the same trick hurt on ORL?]
+ORL has almost no lighting variation; it varies by pose and expression. There the
+leading components carry real identity information, so discarding them destroys
+signal. The trick is a targeted fix for a specific nuisance, not a general
+improvement.
+
+\item[Derive the two-class Fisher direction.]
+Maximise $J(w)=w^{\!\top}\Sb w/w^{\!\top}\Sw w$. It is scale-invariant, so fix
+$w^{\!\top}\Sw w=1$ and use a Lagrange multiplier: $\Sb w=\lambda\Sw w$. For two
+classes $\Sb=\frac{n_1n_2}{n}\delta\delta^{\!\top}$ is rank one with
+$\delta=\mu_1-\mu_2$; substituting and cancelling scalars gives
+$w\propto\Sw^{-1}(\mu_1-\mu_2)$. (Section~\ref{sec:twoclass})
+
+\item[What is the eigenvalue $\lambda$, physically?]
+Multiplying $\Sb w=\lambda\Sw w$ on the left by $w^{\!\top}$ gives
+$\lambda = w^{\!\top}\Sb w / w^{\!\top}\Sw w = J(w)$. The eigenvalue \emph{is} the value
+of the Fisher criterion for that direction, which is why we sort descending.
+
+\item[Why is $\|w\|$ irrelevant, and when does it suddenly matter?]
+$J(\alpha w)=J(w)$, so the criterion fixes only a direction. But
+nearest-neighbour \emph{distances} depend on the relative scaling of the axes, so
+once we classify we must pick a convention. We normalise each Fisherface to unit
+norm and say so.
+
+\item[Prove $\St=\Sb+\Sw$.]
+Split $x-\mu=(x-\mu_i)+(\mu_i-\mu)$, expand the outer product, and note the cross
+terms vanish because $\sum_{x\in i}(x-\mu_i)=0$ by definition of the class mean.
+(Theorem~\ref{thm:decomp})
+
+\item[Why at most $c-1$ Fisherfaces?]
+$\Sb$ is spanned by the $c$ vectors $\mu_i-\mu$, which obey the one relation
+$\sum_i n_i(\mu_i-\mu)=0$, so $\rank(\Sb)\le c-1$. Any $w$ in the null space of
+$\Sb$ gives $\lambda=0$. (Theorem~\ref{thm:rankSb})
+
+\item[Why is $\rank(\Sw)\le N-c$?]
+$\Sw=A_WA_W^{\!\top}$ where $A_W$ holds the within-class-centred images. Each class's
+$n_i$ columns sum to zero, so contribute at most $n_i-1$ independent directions;
+summing, $\sum_i(n_i-1)=N-c$. (Theorem~\ref{thm:rankSw})
+
+\item[Is that bound always attained?]
+No, it is an upper bound. We measured $1481$ instead of $1482$ on Yale and traced
+it to a duplicated image file, which is an exact linear dependency. After removing
+it the bound is met exactly.
+
+\item[Are Fisherfaces orthogonal?]
+Not in the Euclidean sense. They satisfy $w_i^{\!\top}\Sw w_j=\delta_{ij}$, i.e.\ they
+are orthonormal in the inner product defined by $\Sw$. We measured the Euclidean
+Gram matrix to have about half its energy off the diagonal, while $W^{\!\top}\Sw W$ is
+diagonal to $10^{-13}$. Eigenfaces \emph{are} orthonormal; Fisherfaces are not.
+
+\item[Is the set of Fisherfaces unique?]
+No. $J(WM)=J(W)$ for any invertible $M$, so LDA determines a subspace, not a
+basis or a scaling. Different correct implementations can produce different-looking
+Fisherface images. (Theorem~\ref{thm:invariance})
+
+\item[When is LDA actually optimal?]
+When the classes are Gaussian with a \emph{shared} covariance and equal priors, the
+Bayes-optimal boundary is linear and LDA finds it. Our toy experiment confirms it:
+measured error $1.70\%$ against a theoretical Bayes error of $2.28\%$. With
+strongly unequal covariances the optimal boundary is quadratic and LDA is no longer
+optimal.
+
+\end{description}
+
+\section{The Fisherfaces construction}
+
+\begin{description}[leftmargin=*,style=nextline]
+
+\item[Why is a PCA stage needed at all?]
+$\Sw$ is $d\times d$ ($8.3$~GB for Yale) \emph{and} singular, since
+$\rank(\Sw)\le N-c=1482 \ll d=32256$. PCA fixes both: it shrinks the matrix and
+removes the guaranteed null space. The PCA stage is a workaround for $d\gg N$, not
+a part of LDA.
+
+\item[Why exactly $m=N-c$?]
+It is the largest $m$ for which the projected $\Sw$ is non-singular. Above it,
+rank is still capped at $N-c$ so $\Sw$ stays singular; at or below it, $\Sw$ is
+generically full rank.
+
+\item[So is $m=N-c$ the best choice?]
+No, and this is the most interesting result we have. ``Invertible'' is not ``well
+conditioned'': at $m=N-c$ the rank equals the dimension exactly, with no slack, so
+the smallest eigenvalues of $\Sw$ are estimation noise and $\Sw^{-1}$ amplifies
+them. Our sweep finds a clearly better $m$ on both databases.
+(Section~\ref{sec:msweep})
+
+\item[Why not just use $\Sw^{-1}\Sb$ and \texttt{eig}?]
+$\Sw^{-1}\Sb$ is not symmetric, so a general eigensolver is used and round-off can
+return complex eigenvalues and non-orthogonal eigenvectors. It also forms
+$\Sw^{-1}$ explicitly, which is the worst thing to do to an ill-conditioned matrix.
+
+\item[What does Cholesky whitening do?]
+Writes $\Sw=R^{\!\top} R$ and substitutes $w=R^{-1}z$, turning the generalised problem
+into the \emph{symmetric} ordinary problem $R^{-\top}\Sb R^{-1}z=\lambda z$.
+Symmetric eigensolvers guarantee real eigenvalues, orthogonal eigenvectors and
+backward stability. Conceptually: whiten with $\Sw$, then do PCA on the class
+means. (Section~\ref{sec:solve})
+
+\item[Why re-symmetrise with \texttt{(M+M')/2}?]
+Floating-point addition is not associative, so accumulating outer products in a
+loop leaves the result differing from its transpose by about $10^{-16}$. \texttt{chol}
+and symmetric \texttt{eig} read one triangle and assume the other matches, so the
+asymmetry can mislead them. The triangular solves reintroduce it, so we do it
+twice.
+
+\item[What if \texttt{chol} fails?]
+Its second output \texttt{p} is non-zero. We add a ridge
+$\varepsilon = 10^{-6}\tr(\Sw)/m$ and retry, and we log that it happened. The
+scaling by $\tr(\Sw)/m$ (the mean eigenvalue) makes $\varepsilon$ comparable to
+$\Sw$'s own magnitude, which a bare constant would not be.
+
+\item[Why report Eigenfaces at $k=c-1$ as well as at its best $k$?]
+Fisherfaces always uses exactly $c-1$ features. Comparing it against Eigenfaces
+using $170$ features is not like-for-like, so we report the matched-dimension case
+too. It is the fairer comparison and it flatters Fisherfaces further.
+
+\end{description}
+
+\section{Code details}
+
+\begin{description}[leftmargin=*,style=nextline]
+
+\item[Why \texttt{double(imread(...))}?]
+\texttt{imread} gives \texttt{uint8}. MATLAB's \texttt{uint8} arithmetic saturates
+at $0$ and $255$ and rounds, so subtracting the mean would clip every negative
+value to zero and silently destroy the data.
+
+\item[Why sort the eigenvalues at all?]
+\texttt{eig} returns them ascending, so without sorting we would keep the
+\emph{least} informative directions. There is no error -- just chance-level
+recognition.
+
+\item[Why divide the eigenvalues by $M$?]
+We diagonalise $L=A^{\!\top}\!A$ but the theory is about $C=\frac1N AA^{\!\top}$. Their
+non-zero eigenvalues are equal, so the only difference is the $\frac1N$. Without
+the division the reconstruction identity is wrong by a factor of $N$ -- and the
+recognition rates are unaffected, which is what makes the bug hard to spot.
+
+\item[Why compare $|u_1^{\!\top} u_2|$ rather than $\|u_1-u_2\|$?]
+Eigenvector signs are arbitrary: $-u$ is as valid as $u$. Two correct programs can
+return negated eigenfaces, so only the absolute inner product is meaningful.
+
+\item[Why preallocate instead of \texttt{X = [X, im(:)]}?]
+Growing an array reallocates and copies the whole thing every iteration. For Yale
+that is 1520 copies of a 392~MB matrix. We count the files first, then fill a
+preallocated array.
+
+\item[Why build ORL paths by index rather than globbing \texttt{s*}?]
+The \texttt{ORL/} directory contains a stray empty folder named \texttt{sed}, so
+\texttt{dir('ORL/s*')} returns 41 entries and a glob-based loader would try to read
+images from it. Constructing \texttt{['s' num2str(p)]} for $p=1\ldots40$ never sees
+it.
+
+\item[Why list the Yale directory instead of building names by index?]
+\texttt{yaleB14} does not exist, so the names are not a contiguous numeric range
+and index construction would fail on the gap.
+
+\item[What is the difference between \texttt{mean(X,1)} and \texttt{mean(X,2)}?]
+\texttt{mean(X,2)} averages across columns, giving the $d\times1$ \textbf{mean
+face}. \texttt{mean(X,1)} averages down each column, giving a $1\times N$ row of
+\textbf{per-image brightnesses}. Neither errors if confused.
+
+\item[Why does \texttt{normCols} make nearest neighbour a correlation classifier?]
+For zero-mean unit-norm $a,b$: $\|a-b\|^2 = 2-2a^{\!\top} b$. Minimising distance is
+therefore exactly maximising correlation.
+
+\item[Why squared distances and no \texttt{sqrt}?]
+$\sqrt{\cdot}$ is monotonic, so it cannot change which neighbour is nearest, and
+skipping it saves an operation per comparison.
+
+\item[Why must local functions be last in the file?]
+MATLAB requires it for scripts. They also cannot see the script's variables, which
+makes each one independently testable -- a feature, not a limitation.
+
+\end{description}
+\end{document}

@@ -1,0 +1,1150 @@
+% =====================================================================
+%  CS 740 PROJECT -- EIGENFACES vs FISHERFACES
+%
+%  Belhumeur, Hespanha & Kriegman, "Eigenfaces vs. Fisherfaces:
+%  Recognition Using Class Specific Linear Projection", IEEE TPAMI
+%  19(7), 1997.
+%
+%  Shubh Karman Singh (26M0843), Saumya Bajpai (26D0366)
+%
+%  This is ONE monolithic script.  Every experiment is a numbered
+%  section (%% S0, %% S1, ...) so that any single part can be re-run on
+%  its own.  All helper routines are LOCAL FUNCTIONS collected at the
+%  very bottom of the file (MATLAB requires local functions in a script
+%  to come last).
+%
+%  Run with:   matlab -batch "run('fisherfaces_project.m')"
+% =====================================================================
+
+clc;
+clear;
+close all;
+
+%% ====================================================================
+%% S0  CONFIGURATION
+%  Paths are relative to this file, which lives in hw3/fisherfaces_project/.
+%  rng(0) fixes the random number generator so that the "random split"
+%  experiments give the same answer every time we run the script -- without
+%  this, every run would print different recognition rates and we could not
+%  quote stable numbers in the report.
+%% ====================================================================
+
+orlRoot  = '../ORL/';
+yaleRoot = '../CroppedYale/';
+figDir   = 'figs/';
+
+if exist(figDir, 'dir') == 0
+    mkdir(figDir);
+end
+
+rng(0);
+
+% MATLAB R2025a and later choose a figure colour theme automatically, and on this
+% machine that resolves to the DARK theme -- which produces black-background
+% figures that look wrong printed in a report.  Force the light theme, and also
+% force a white figure background for the image montages.  Wrapped in try/catch
+% because the settings path does not exist on older MATLAB versions (where
+% figures are light by default anyway).
+try
+    sTheme = settings;
+    sTheme.matlab.appearance.figure.GraphicsTheme.TemporaryValue = 'light';
+catch
+    % older MATLAB: nothing to do
+end
+set(groot, 'defaultFigureColor', 'w');
+
+% Image sizes (pixels).  d = number of pixels = length of one image vector.
+orlH = 112;  orlW = 92;   dORL  = orlH * orlW;    % 10304
+yalH = 192;  yalW = 168;  dYALE = yalH * yalW;    % 32256
+
+fprintf('=====================================================\n');
+fprintf('  EIGENFACES vs FISHERFACES\n');
+fprintf('=====================================================\n');
+
+%% ====================================================================
+%% S1  TOY 2-D EXPERIMENT:  WHERE PCA FAILS AND LDA SUCCEEDS
+%
+%  Two Gaussian classes that share the same covariance matrix.
+%      Sigma = [16 0; 0 0.25]   mu1 = (0,-1)   mu2 = (0,+1)
+%
+%  The spread WITHIN each class is huge along x (variance 16) and tiny
+%  along y (variance 0.25).  The two classes are separated ONLY along y.
+%
+%  PCA maximises total variance, so it will pick x -- the direction that
+%  carries no class information at all.
+%  LDA maximises the ratio (between-class)/(within-class), so it picks y.
+%
+%  This is the whole Eigenfaces-vs-Fisherfaces story in two dimensions.
+%% ====================================================================
+
+fprintf('\n--- S1: toy 2-D PCA vs LDA ---\n');
+
+Sigma = [16 0; 0 0.25];
+mu1   = [0; -1];
+mu2   = [0;  1];
+nToy  = 500;
+
+% To draw a sample from N(mu, Sigma) we need a matrix Rt with Rt*Rt' = Sigma.
+% chol gives Sigma = R'*R, so Rt = R' works:  if z ~ N(0,I) then
+% cov(R'z) = R'*I*R = R'*R = Sigma.
+R = chol(Sigma);
+
+X1 = zeros(2, nToy);
+X2 = zeros(2, nToy);
+for i = 1:nToy
+    X1(:, i) = mu1 + R' * randn(2, 1);
+    X2(:, i) = mu2 + R' * randn(2, 1);
+end
+
+Xtoy = [X1, X2];
+ytoy = [ones(1, nToy), 2 * ones(1, nToy)];
+
+% ---- sample means ----
+m1 = mean(X1, 2);
+m2 = mean(X2, 2);
+mAll = mean(Xtoy, 2);
+
+% ---- within-class scatter S_W = sum over classes of sum (x-mi)(x-mi)' ----
+D1 = X1 - m1;
+D2 = X2 - m2;
+SwToy = D1 * D1' + D2 * D2';
+
+% ---- between-class scatter S_B = sum over classes of ni (mi-m)(mi-m)' ----
+SbToy = nToy * (m1 - mAll) * (m1 - mAll)' + nToy * (m2 - mAll) * (m2 - mAll)';
+
+% ---- LDA direction: w proportional to inv(S_W) * (m2 - m1) ----
+% The backslash solves SwToy * w = (m2-m1) without forming the inverse,
+% which is both faster and numerically better than inv(SwToy)*(m2-m1).
+wLDA = SwToy \ (m2 - m1);
+wLDA = wLDA / norm(wLDA);
+
+% ---- PCA direction: top eigenvector of the TOTAL covariance ----
+Atoy  = Xtoy - mAll;
+Ctoy  = (Atoy * Atoy') / size(Xtoy, 2);
+[Vt, Dt] = eig(Ctoy);
+[~, it]  = sort(diag(Dt), 'descend');
+wPCA = Vt(:, it(1));
+wPCA = wPCA / norm(wPCA);
+
+fprintf('  LDA direction : (%.4f, %.4f)\n', wLDA(1), wLDA(2));
+fprintf('  PCA direction : (%.4f, %.4f)\n', wPCA(1), wPCA(2));
+
+% ---- Fisher criterion J(w) = (w'*Sb*w) / (w'*Sw*w) ----
+jLDA = (wLDA' * SbToy * wLDA) / (wLDA' * SwToy * wLDA);
+jPCA = (wPCA' * SbToy * wPCA) / (wPCA' * SwToy * wPCA);
+
+% Best of 1000 random directions, as a sanity floor.
+jRandBest = 0;
+for i = 1:1000
+    wr = randn(2, 1);
+    wr = wr / norm(wr);
+    jr = (wr' * SbToy * wr) / (wr' * SwToy * wr);
+    if jr > jRandBest
+        jRandBest = jr;
+    end
+end
+
+fprintf('  J(w_LDA)  = %.6f\n', jLDA);
+fprintf('  J(w_PCA)  = %.6f\n', jPCA);
+fprintf('  J(best of 1000 random) = %.6f\n', jRandBest);
+fprintf('  ratio J(LDA)/J(PCA) = %.1f\n', jLDA / jPCA);
+
+% ---- classification error along each 1-D direction ----
+% Project, then threshold half-way between the two projected class means.
+errLDA = toyError(X1, X2, wLDA);
+errPCA = toyError(X1, X2, wPCA);
+
+% ---- theoretical Bayes error for equal-covariance Gaussians ----
+% Pe = Phi(-Delta/2) with Delta^2 = (mu2-mu1)' * inv(Sigma) * (mu2-mu1).
+% normcdf needs the Statistics Toolbox, so use the identity
+%     Phi(-a) = 0.5 * erfc(a / sqrt(2))
+% with erfc, which is built into plain MATLAB.
+delta2 = (mu2 - mu1)' * (Sigma \ (mu2 - mu1));
+delta  = sqrt(delta2);
+bayesErr = 0.5 * erfc((delta / 2) / sqrt(2));
+
+fprintf('  error along w_LDA = %.2f%%\n', 100 * errLDA);
+fprintf('  error along w_PCA = %.2f%%\n', 100 * errPCA);
+fprintf('  Delta = %.4f, theoretical Bayes error = %.2f%%\n', delta, 100 * bayesErr);
+
+% ---- BRUTE-FORCE CHECK THAT THE CLOSED FORM REALLY MAXIMISES J ----
+% In 2-D every unit direction is (cos t, sin t) for some angle t, so we can
+% simply try all of them on a fine grid and see which one gives the largest
+% Fisher criterion.  If our formula w = inv(S_W)*(m2-m1) is right, the best
+% angle on the grid must agree with it.  This is a direct numerical proof of
+% the derivation and -- unlike fitcdiscr -- it needs no toolbox.
+bestJ = -1;
+bestT = 0;
+for t = 0:0.0005:pi
+    wt = [cos(t); sin(t)];
+    jt = (wt' * SbToy * wt) / (wt' * SwToy * wt);
+    if jt > bestJ
+        bestJ = jt;
+        bestT = t;
+    end
+end
+wBrute = [cos(bestT); sin(bestT)];
+fprintf('  brute-force best J over 6283 directions = %.6f\n', bestJ);
+fprintf('  J(w_LDA) - J(brute) = %.3e  (should be >= 0, up to grid step)\n', jLDA - bestJ);
+fprintf('  |cos angle| between closed-form w and brute-force w = %.8f\n', abs(wBrute' * wLDA));
+
+% ---- optional cross-check against the Statistics Toolbox ----
+% Not installed on this machine (only MATLAB + Image Processing + Computer
+% Vision), so this block is skipped; the brute-force check above covers it.
+if exist('fitcdiscr', 'file') == 2
+    mdl = fitcdiscr(Xtoy', ytoy');
+    % For 2 classes fitcdiscr stores the boundary as Const + Linear'*x = 0,
+    % so the normal of that boundary is the discriminant direction.
+    wML = mdl.Coeffs(1, 2).Linear;
+    wML = wML / norm(wML);
+    % Eigenvector / normal sign is arbitrary, so compare |cos(angle)|.
+    cosAng = abs(wML' * wLDA);
+    fprintf('  |cos angle| between our w and fitcdiscr = %.8f\n', cosAng);
+else
+    fprintf('  fitcdiscr not available, skipping toolbox cross-check\n');
+end
+
+% ---- figure: scatter with both directions ----
+figure('Visible', 'off', 'Position', [100 100 900 400]);
+subplot(1, 2, 1);
+plot(X1(1, :), X1(2, :), '.', 'Color', [0.2 0.4 0.8]); hold on;
+plot(X2(1, :), X2(2, :), '.', 'Color', [0.85 0.33 0.1]);
+sc = 12;
+plot([-sc * wPCA(1), sc * wPCA(1)], [-sc * wPCA(2), sc * wPCA(2)], 'k-', 'LineWidth', 2);
+plot([-sc * wLDA(1), sc * wLDA(1)], [-sc * wLDA(2), sc * wLDA(2)], 'g-', 'LineWidth', 2);
+axis equal; grid on;
+xlabel('x'); ylabel('y');
+title('Toy data: PCA (black) vs LDA (green)');
+legend('class 1', 'class 2', 'PCA dir', 'LDA dir', 'Location', 'best');
+
+subplot(2, 2, 2);
+histogram(wLDA' * X1, 40); hold on; histogram(wLDA' * X2, 40);
+title(sprintf('projected on w_{LDA}: error %.2f%%', 100 * errLDA));
+grid on;
+
+subplot(2, 2, 4);
+histogram(wPCA' * X1, 40); hold on; histogram(wPCA' * X2, 40);
+title(sprintf('projected on w_{PCA}: error %.2f%%', 100 * errPCA));
+grid on;
+
+saveas(gcf, [figDir 's1_toy.png']);
+
+%% ====================================================================
+%% S2  BUILD THE FOLDER LISTS FOR THE TWO FACE DATABASES
+%
+%  ORL  : subjects live in  ../ORL/s1 ... ../ORL/s40, 10 images each.
+%         NOTE: the ORL directory also contains a stray empty folder called
+%         'sed'.  A glob like dir('../ORL/s*') would pick it up and break the
+%         loader.  We avoid the problem completely by BUILDING the path from
+%         the subject index, exactly as the HW3 code did.
+%
+%  Yale : subjects live in ../CroppedYale/yaleB01 ... yaleB39, with yaleB14
+%         missing (38 subjects).  The number of images per subject is NOT
+%         constant -- it varies from 60 to 64 -- so nothing may assume 64.
+%% ====================================================================
+
+orlFolders40 = cell(1, 40);
+for p = 1:40
+    orlFolders40{p} = [orlRoot 's' num2str(p) '/'];
+end
+orlFolders32 = orlFolders40(1:32);          % the 32 subjects HW3 used
+
+% For Yale we must list the directory, because yaleB14 does not exist and so
+% the names are not a contiguous numeric range.  dir returns entries in
+% alphabetical order, and for these names alphabetical order equals numeric
+% order ('yaleB01' < 'yaleB02' < ... < 'yaleB39').
+dy = dir(yaleRoot);
+yaleFolders = {};
+for i = 1:numel(dy)
+    % keep real sub-directories only: skip '.', '..' and any hidden entry
+    if dy(i).isdir && dy(i).name(1) ~= '.'
+        yaleFolders{end+1} = [yaleRoot dy(i).name '/'];   %#ok<SAGROW>
+    end
+end
+fprintf('\n--- S2: datasets found ---\n');
+fprintf('  ORL subjects  : %d\n', numel(orlFolders40));
+fprintf('  Yale subjects : %d\n', numel(yaleFolders));
+
+%% ====================================================================
+%% S3 / S4  EIGENFACES BASELINE -- REPRODUCE THE HW3 NUMBERS EXACTLY
+%
+%  This is a REGRESSION TEST.  The loader has been rewritten (preallocation
+%  instead of growing the matrix inside the loop, one shared function instead
+%  of copy-pasted ORL/Yale blocks), so we must prove the rewrite did not
+%  change the data.  If these printed rates stop matching q1_matlab/run_log.txt
+%  then the split logic has drifted and nothing downstream can be trusted.
+%
+%  Expected from HW3 (run_log.txt):
+%    ORL  all coeffs @ ks_d : 17.2 44.5 71.1 75.8 93.0 92.2 92.2 94.5 95.3 ...
+%    Yale all coeffs @ ks_d :  2.9  3.2  3.1  6.7 16.8 20.8 24.2 28.0 30.8 ...
+%% ====================================================================
+
+fprintf('\n--- S3/S4: eigenfaces baseline (HW3 regression check) ---\n');
+
+ks_d = [1 2 3 5 10 15 20 30 50 75 100 150 170];
+
+% ---------- ORL, 32 subjects, 6 train / 4 test, HW3 file order ----------
+[XtrO, ytrO, XteO, yteO] = loadFaces(orlFolders32, 6, 'hw3', dORL);
+fprintf('  ORL-32 train %d x %d, test %d x %d\n', size(XtrO), size(XteO));
+
+[UO, lambdaO, meanO] = doPCA(XtrO);
+AO   = XtrO - meanO;
+AteO = XteO - meanO;
+
+rateO = zeros(size(ks_d));
+for t = 1:numel(ks_d)
+    k = ks_d(t);
+    Uk = UO(:, 1:k);
+    rateO(t) = nnClassify(Uk' * AO, ytrO, Uk' * AteO, yteO);
+end
+fprintf('  ORL-32 eigenfaces : ');
+fprintf('%.1f ', rateO);
+fprintf('\n');
+
+% ---------- Yale, 38 subjects, 40 train, HW3 file order ----------
+[XtrY, ytrY, XteY, yteY] = loadFaces(yaleFolders, 40, 'hw3', dYALE);
+fprintf('  Yale   train %d x %d, test %d x %d\n', size(XtrY), size(XteY));
+
+[UY, lambdaY, meanY] = doPCA(XtrY);
+AY   = XtrY - meanY;
+AteY = XteY - meanY;
+
+rateY = zeros(size(ks_d));
+for t = 1:numel(ks_d)
+    k = ks_d(t);
+    Uk = UY(:, 1:k);
+    rateY(t) = nnClassify(Uk' * AY, ytrY, Uk' * AteY, yteY);
+end
+fprintf('  Yale   eigenfaces : ');
+fprintf('%.1f ', rateY);
+fprintf('\n');
+
+% ---------- the reconstruction-error identity ----------
+% THEOREM: the mean squared reconstruction error when we keep k components
+% equals the sum of the DISCARDED eigenvalues of the covariance matrix.
+% Here lambda already contains eigenvalues of C = A*A'/M (doPCA divides the
+% eigenvalues of L = A'*A by M), which is why the two columns agree.
+fprintf('\n  Reconstruction error identity (ORL-32):\n');
+fprintf('      k    measured error     sum of discarded eigenvalues\n');
+for k = [10 50 100]
+    Uk   = UO(:, 1:k);
+    Xrec = meanO + Uk * (Uk' * AO);
+    errM = mean(sum((Xrec - XtrO).^2, 1));
+    errT = sum(lambdaO(k+1:end));
+    fprintf('    %4d  %16.4f  %16.4f\n', k, errM, errT);
+end
+
+%% ====================================================================
+%% S5  THE SMALL-SAMPLE-SIZE PROBLEM, SHOWN NUMERICALLY
+%
+%  Fisher's LDA needs inv(S_W).  For face images that is impossible to do
+%  directly, for two separate reasons, and we show BOTH here:
+%
+%   (1) SIZE.   S_W is d x d.  For Yale d = 32256, so S_W would hold
+%       32256^2 = 1.04e9 doubles = 8.3 GB.  We never build it.
+%   (2) RANK.   rank(S_W) <= N - c.  For Yale that is 1520 - 38 = 1482,
+%       far below d = 32256, so S_W is singular no matter how it is built.
+%
+%  We verify (2) without ever forming the d x d matrix: S_W = Aw*Aw' where
+%  Aw holds the within-class-centred images, and rank(Aw*Aw') = rank(Aw),
+%  which we get from the small N x N Gram matrix Aw'*Aw.
+%% ====================================================================
+
+fprintf('\n--- S5: why S_W cannot be inverted in pixel space ---\n');
+
+NY = size(XtrY, 2);
+cY = numel(yaleFolders);
+
+% Build the within-class-centred data matrix: subtract each class mean from
+% the images of that class.
+AwY = zeros(size(XtrY));
+for i = 1:cY
+    cols = find(ytrY == i);
+    mi   = mean(XtrY(:, cols), 2);
+    AwY(:, cols) = XtrY(:, cols) - mi;
+end
+
+GwY = AwY' * AwY;                 % N x N Gram matrix, cheap
+rankSwY = rank(GwY);              % rank(S_W) = rank(Aw) = rank(Aw'*Aw)
+
+fprintf('  Yale: d = %d, N = %d, c = %d\n', dYALE, NY, cY);
+fprintf('  S_W in pixel space would be %d x %d = %.2f GB\n', ...
+        dYALE, dYALE, (dYALE^2 * 8) / 1e9);
+fprintf('  theory: rank(S_W) <= N - c = %d\n', NY - cY);
+fprintf('  measured rank(S_W)         = %d\n', rankSwY);
+fprintf('  so S_W is singular: rank %d << d %d\n', rankSwY, dYALE);
+
+% ---- why the measured rank is 1481 and not the full bound 1482 ----
+% N - c is an UPPER bound.  We lose one more because the dataset on this
+% machine contains a stray duplicated file,
+%     CroppedYale/yaleB12/'yaleB12_P00A+020E+10 - Copy.pgm',
+% which is byte-identical to yaleB12_P00A+020E+10.pgm.  Two identical
+% columns stay identical after within-class centring, so they are an exact
+% linear dependency and cost exactly one more unit of rank.
+fprintf('\n  Searching the training set for exact duplicate images...\n');
+nDup = 0;
+for i = 1:cY
+    cols = find(ytrY == i);
+    for u = 1:numel(cols)
+        for v = (u+1):numel(cols)
+            if norm(XtrY(:, cols(u)) - XtrY(:, cols(v))) == 0
+                fprintf('    duplicate: subject %d, training images %d and %d\n', i, u, v);
+                nDup = nDup + 1;
+            end
+        end
+    end
+end
+fprintf('  exact duplicate pairs found = %d\n', nDup);
+fprintf('  this accounts for the gap: %d (bound) - %d (duplicates) = %d (measured)\n', ...
+        NY - cY, nDup, rankSwY);
+
+clear AwY GwY;                    % free the memory again
+
+%% ====================================================================
+%% S6 / S7 / S8  MAIN COMPARISON
+%
+%  Four methods, exactly the ones the paper compares:
+%
+%   1. Correlation  -- nearest neighbour on raw pixels, after normalising
+%                      each image to zero mean and unit norm.  No subspace.
+%   2. Eigenfaces   -- PCA, nearest neighbour in the k-dimensional space.
+%   3. Eigenfaces w/o first 3 -- same, but drop principal components 1..3,
+%                      which (by the Lambertian argument) mostly encode the
+%                      lighting direction rather than identity.
+%   4. Fisherfaces  -- PCA down to N-c dimensions, then LDA, keeping c-1
+%                      directions.
+%
+%  FAIRNESS NOTE: Fisherfaces always uses exactly c-1 features.  Quoting
+%  Eigenfaces at its best k over all k would compare 50 or 170 features
+%  against c-1, which is not a like-for-like comparison.  So we report
+%  Eigenfaces BOTH at its best k AND at k = c-1, the matched-dimension case.
+%% ====================================================================
+
+fprintf('\n--- S6/S7/S8: main comparison ---\n');
+
+% Each row: name, folders, numTrain, splitMode, d
+configs = { ...
+    'ORL-32  (HW3 split)',  {orlFolders32}, 6,  'hw3',    dORL,  orlH, orlW; ...
+    'ORL-40  (HW3 split)',  {orlFolders40}, 6,  'hw3',    dORL,  orlH, orlW; ...
+    'ORL-32  (numeric)',    {orlFolders32}, 6,  'numeric',dORL,  orlH, orlW; ...
+    'Yale-38 (HW3 split)',  {yaleFolders},  40, 'hw3',    dYALE, yalH, yalW; ...
+    'Yale-38 (random)',     {yaleFolders},  40, 'random', dYALE, yalH, yalW };
+
+ksAll = [1 2 3 5 10 15 20 30 50 75 100 150 170];
+
+nCfg = size(configs, 1);
+results = zeros(nCfg, 5);   % corr | eig best | eig@(c-1) | eigDrop3 best | fisher
+resEigBestK = zeros(nCfg, 1);
+
+for ci = 1:nCfg
+    name      = configs{ci, 1};
+    folders   = configs{ci, 2}{1};
+    numTrain  = configs{ci, 3};
+    splitMode = configs{ci, 4};
+    dPix      = configs{ci, 5};
+
+    fprintf('\n  == %s ==\n', name);
+
+    [Xtr, ytr, Xte, yte] = loadFaces(folders, numTrain, splitMode, dPix);
+    N = size(Xtr, 2);
+    c = numel(folders);
+    fprintf('     N = %d, c = %d, d = %d, test = %d\n', N, c, dPix, size(Xte, 2));
+
+    % ---- 1. correlation baseline (raw pixels) ----
+    rCorr = nnClassify(normCols(Xtr), ytr, normCols(Xte), yte);
+
+    % ---- PCA once, reused by methods 2, 3 and 4 ----
+    [U, lam, mf] = doPCA(Xtr);
+    A   = Xtr - mf;
+    Ate = Xte - mf;
+
+    % ---- 2 and 3. eigenfaces, with and without the first 3 components ----
+    rEig  = zeros(1, numel(ksAll));
+    rEig3 = nan(1, numel(ksAll));
+    for t = 1:numel(ksAll)
+        k = ksAll(t);
+        if k > size(U, 2)
+            rEig(t) = NaN;
+            continue;
+        end
+        Uk = U(:, 1:k);
+        P  = Uk' * A;
+        Q  = Uk' * Ate;
+        rEig(t) = nnClassify(P, ytr, Q, yte);
+        if k > 3
+            % keep rows 4..k, i.e. throw away the top 3 eigencoefficients
+            rEig3(t) = nnClassify(P(4:k, :), ytr, Q(4:k, :), yte);
+        end
+    end
+
+    % eigenfaces at the SAME number of features Fisherfaces gets
+    Ucm1 = U(:, 1:(c-1));
+    rEigMatched = nnClassify(Ucm1' * A, ytr, Ucm1' * Ate, yte);
+
+    % ---- 4. fisherfaces ----
+    m = N - c;                                  % the paper's choice
+    [Wopt, info] = fisherFromPCA(U, mf, Xtr, ytr, m, 2);
+    rFish = nnClassify(Wopt' * A, ytr, Wopt' * Ate, yte);
+
+    [bEig, iEig] = max(rEig);
+    bEig3 = max(rEig3);
+
+    results(ci, :)  = [rCorr, bEig, rEigMatched, bEig3, rFish];
+    resEigBestK(ci) = ksAll(iEig);
+
+    fprintf('     correlation (raw pixels)        : %.1f%%\n', rCorr);
+    fprintf('     eigenfaces, best k = %d          : %.1f%%\n', ksAll(iEig), bEig);
+    fprintf('     eigenfaces at k = c-1 = %d       : %.1f%%\n', c-1, rEigMatched);
+    fprintf('     eigenfaces w/o top 3, best      : %.1f%%\n', bEig3);
+    fprintf('     FISHERFACES (%d features)        : %.1f%%\n', c-1, rFish);
+    fprintf('     [S_W: m = %d, rank = %d, cond = %.3e, regularised = %d]\n', ...
+            m, info.rankSw, info.condSw, info.usedReg);
+    fprintf('     [check ||S_T - (S_B+S_W)|| / ||S_T|| = %.3e]\n', info.resST);
+    fprintf('     [cross-check vs eig(S_B,S_W,''chol''): %.3e]\n', info.crossCheck);
+
+    % keep the ORL-32 and Yale HW3-split pieces for the later sections
+    % Keep only what the later sections actually need.  Holding the full
+    % Yale matrices (X is 392 MB, U is another 392 MB) would waste over a
+    % gigabyte for no reason, so we store a few sample images and the first
+    % 60 basis vectors rather than everything.
+    if ci == 1
+        keepORL = struct('U', U, 'mf', mf, 'Xtr', Xtr, 'ytr', ytr, ...
+                         'Xte', Xte, 'yte', yte, 'Wopt', Wopt, 'lam', lam, ...
+                         'rEig', rEig, 'rEig3', rEig3, 'c', c, 'N', N);
+    elseif ci == 4
+        keepYale = struct('U', U(:, 1:60), 'mf', mf, 'sample', Xtr(:, 1), ...
+                          'Wopt', Wopt, 'lam', lam, ...
+                          'rEig', rEig, 'rEig3', rEig3, 'c', c, 'N', N);
+    end
+    clear U A Ate Xtr Xte Wopt;
+end
+
+% ---- summary table ----
+fprintf('\n  ================ SUMMARY (recognition rate %%) ================\n');
+fprintf('  %-22s %7s %9s %9s %9s %9s\n', 'dataset', 'corr', 'eig best', 'eig c-1', 'eig -top3', 'FISHER');
+for ci = 1:nCfg
+    fprintf('  %-22s %7.1f %9.1f %9.1f %9.1f %9.1f\n', configs{ci,1}, results(ci, :));
+end
+fprintf('  ==============================================================\n');
+
+%% ====================================================================
+%% S9  SWEEP THE PCA DIMENSION m USED BEFORE LDA
+%
+%  The paper fixes m = N - c.  The reason is a rank argument: rank(S_W) <=
+%  N - c, so keeping more than N - c principal components guarantees a
+%  singular S_W, while keeping exactly N - c makes it (generically) full
+%  rank.
+%
+%  But "full rank" is not the same as "well conditioned".  At m = N - c the
+%  rank of S_W is EXACTLY m, i.e. it is nonsingular with zero slack, so its
+%  smallest eigenvalues are built from almost no data and are essentially
+%  estimation noise.  Inverting then amplifies that noise.  This sweep asks
+%  whether a smaller m -- throwing away those noisy directions -- actually
+%  generalises better.
+%% ====================================================================
+
+fprintf('\n--- S9: sweep of PCA dimension m before LDA ---\n');
+
+sweepCfgs = { ...
+    'ORL-32', orlFolders32, 6,  'hw3',    dORL,  [31 40 60 80 100 120 140 160]; ...
+    'Yale-38', yaleFolders, 40, 'random', dYALE, [37 60 100 200 400 700 1000 1200 1482] };
+
+mSweepStore = cell(2, 1);
+
+for si = 1:size(sweepCfgs, 1)
+    nameS   = sweepCfgs{si, 1};
+    folders = sweepCfgs{si, 2};
+    nTr     = sweepCfgs{si, 3};
+    sMode   = sweepCfgs{si, 4};
+    dPix    = sweepCfgs{si, 5};
+    mList   = sweepCfgs{si, 6};
+
+    [Xtr, ytr, Xte, yte] = loadFaces(folders, nTr, sMode, dPix);
+    N = size(Xtr, 2);
+    c = numel(folders);
+    [U, ~, mf] = doPCA(Xtr);
+    A   = Xtr - mf;
+    Ate = Xte - mf;
+
+    fprintf('\n  == %s ==  (N = %d, c = %d, N-c = %d)\n', nameS, N, c, N - c);
+    fprintf('      m      rate%%     rank(S_W)   cond(S_W)    ridge?\n');
+
+    rateM = zeros(size(mList));
+    condM = zeros(size(mList));
+    regM  = zeros(size(mList));
+    for t = 1:numel(mList)
+        m = mList(t);
+        [W, inf1] = fisherFromPCA(U, mf, Xtr, ytr, m, 1);
+        rateM(t) = nnClassify(W' * A, ytr, W' * Ate, yte);
+        condM(t) = inf1.condSw;
+        regM(t)  = inf1.usedReg;
+        fprintf('   %5d   %7.1f   %9d   %.3e      %d\n', ...
+                m, rateM(t), inf1.rankSw, inf1.condSw, inf1.usedReg);
+    end
+
+    [bestR, bestI] = max(rateM);
+    fprintf('    best m = %d at %.1f%%  (paper would use m = N-c = %d, giving %.1f%%)\n', ...
+            mList(bestI), bestR, N - c, rateM(end));
+
+    mSweepStore{si} = struct('name', nameS, 'mList', mList, 'rate', rateM, ...
+                             'cond', condM, 'Nmc', N - c);
+
+    clear U A Ate Xtr Xte;
+end
+
+% ---- figure ----
+figure('Visible', 'off', 'Position', [100 100 950 400]);
+for si = 1:2
+    S = mSweepStore{si};
+    subplot(1, 2, si);
+    yyaxis left;
+    plot(S.mList, S.rate, '-o', 'LineWidth', 1.5);
+    ylabel('recognition rate (%)');
+    yyaxis right;
+    semilogy(S.mList, S.cond, '-s', 'LineWidth', 1.2);
+    ylabel('cond(S_W)');
+    xlabel('m = PCA dimension kept before LDA');
+    title([S.name ':  N-c = ' num2str(S.Nmc)]);
+    grid on;
+end
+saveas(gcf, [figDir 's9_m_sweep.png']);
+
+%% ====================================================================
+%% S10  SWEEP THE NUMBER OF TRAINING IMAGES PER SUBJECT
+%
+%  rank(S_W) = sum over classes of (n_i - 1).  Each subject contributes only
+%  n_i - 1 directions to the within-class scatter, so with n_i = 2 we are
+%  estimating the within-class covariance from ONE direction per person.
+%  This is the small-sample-size problem, and it is exactly why Fisherfaces
+%  struggles on ORL (6 images per subject = 5 directions each) while winning
+%  comfortably on Yale (40 images per subject = 39 directions each).
+%
+%  We use the RANDOM Yale split here, so that the lighting bias of the
+%  lexicographic split does not confound the training-size effect.
+%% ====================================================================
+
+fprintf('\n--- S10: sweep of training images per subject (Yale, random split) ---\n');
+
+nList = [2 3 5 10 20 32 40];
+rateFishN = zeros(size(nList));
+rateEigN  = zeros(size(nList));
+rateCorrN = zeros(size(nList));
+
+fprintf('   n/subj     N    N-c   corr%%   eig(best)%%   fisher%%\n');
+for t = 1:numel(nList)
+    nTr = nList(t);
+    [Xtr, ytr, Xte, yte] = loadFaces(yaleFolders, nTr, 'random', dYALE);
+    N = size(Xtr, 2);
+    c = numel(yaleFolders);
+
+    rateCorrN(t) = nnClassify(normCols(Xtr), ytr, normCols(Xte), yte);
+
+    [U, ~, mf] = doPCA(Xtr);
+    A   = Xtr - mf;
+    Ate = Xte - mf;
+
+    % eigenfaces: best over a few k that are valid for this N
+    ksHere = [10 20 30 50 75 100 150 170];
+    ksHere = ksHere(ksHere <= size(U, 2));
+    bestE = 0;
+    for kk = ksHere
+        Uk = U(:, 1:kk);
+        r  = nnClassify(Uk' * A, ytr, Uk' * Ate, yte);
+        if r > bestE
+            bestE = r;
+        end
+    end
+    rateEigN(t) = bestE;
+
+    m = N - c;
+    W = fisherFromPCA(U, mf, Xtr, ytr, m, 0);
+    rateFishN(t) = nnClassify(W' * A, ytr, W' * Ate, yte);
+
+    fprintf('   %5d  %5d  %5d  %6.1f  %10.1f  %8.1f\n', ...
+            nTr, N, N - c, rateCorrN(t), rateEigN(t), rateFishN(t));
+
+    clear U A Ate Xtr Xte;
+end
+
+figure('Visible', 'off');
+plot(nList, rateCorrN, '-^', nList, rateEigN, '-o', nList, rateFishN, '-s', ...
+     'LineWidth', 1.5);
+grid on;
+xlabel('training images per subject');
+ylabel('recognition rate (%)');
+title('Yale (random split): effect of training-set size');
+legend('correlation', 'eigenfaces (best k)', 'fisherfaces', 'Location', 'southeast');
+saveas(gcf, [figDir 's10_n_sweep.png']);
+
+%% ====================================================================
+%% S11  PICTURES: MEAN FACE, EIGENFACES, FISHERFACES, RECONSTRUCTION
+%
+%  Eigenfaces look like smooth, ghostly faces: they are the directions of
+%  largest variance, and for face data that variance is dominated by broad
+%  lighting and shape changes.
+%  Fisherfaces look noisier and much higher frequency.  That is expected,
+%  not a bug: they are optimised to separate identities, not to reconstruct
+%  images, so they emphasise the small localised differences between people
+%  and actively suppress the big lighting directions.
+%% ====================================================================
+
+fprintf('\n--- S11: figures ---\n');
+
+% ---------- ORL: mean face ----------
+figure('Visible', 'off');
+imagesc(reshape(keepORL.mf, orlH, orlW));
+colormap gray; axis image off;
+title('ORL mean face');
+saveas(gcf, [figDir 's11_orl_meanface.png']);
+
+% ---------- ORL: first 25 eigenfaces ----------
+figure('Visible', 'off', 'Position', [100 100 700 760]);
+for i = 1:25
+    subplot(5, 5, i);
+    imagesc(reshape(keepORL.U(:, i), orlH, orlW));
+    colormap gray; axis image off;
+    title(['u_{' num2str(i) '}'], 'FontSize', 8);
+end
+sgtitle('ORL: first 25 eigenfaces');
+saveas(gcf, [figDir 's11_orl_eigenfaces.png']);
+
+% ---------- ORL: first 25 fisherfaces ----------
+figure('Visible', 'off', 'Position', [100 100 700 760]);
+for i = 1:min(25, size(keepORL.Wopt, 2))
+    subplot(5, 5, i);
+    imagesc(reshape(keepORL.Wopt(:, i), orlH, orlW));
+    colormap gray; axis image off;
+    title(['w_{' num2str(i) '}'], 'FontSize', 8);
+end
+sgtitle('ORL: first 25 fisherfaces');
+saveas(gcf, [figDir 's11_orl_fisherfaces.png']);
+
+% ---------- ORL: reconstruction as k grows ----------
+x   = keepORL.Xtr(:, 1);
+ksR = [2 10 20 50 75 100 125 150 175];
+figure('Visible', 'off', 'Position', [100 100 1000 450]);
+subplot(2, 5, 1);
+imagesc(reshape(x, orlH, orlW)); colormap gray; axis image off; title('original');
+for t = 1:numel(ksR)
+    Uk   = keepORL.U(:, 1:ksR(t));
+    xRec = keepORL.mf + Uk * (Uk' * (x - keepORL.mf));
+    subplot(2, 5, t + 1);
+    imagesc(reshape(xRec, orlH, orlW)); colormap gray; axis image off;
+    title(['k = ' num2str(ksR(t))]);
+end
+sgtitle('ORL: PCA reconstruction of one face');
+saveas(gcf, [figDir 's11_orl_reconstruction.png']);
+
+% ---------- Yale: eigenfaces vs fisherfaces side by side ----------
+% 2 rows x 8 columns of 168x192 images needs a figure aspect ratio of about
+% (8*168)/(2*192) = 3.5, otherwise MATLAB pads the gap between the rows with
+% a lot of empty space.
+figure('Visible', 'off', 'Position', [100 100 1200 400]);
+for i = 1:8
+    subplot(2, 8, i);
+    imagesc(reshape(keepYale.U(:, i), yalH, yalW));
+    colormap gray; axis image off;
+    title(['u_{' num2str(i) '}'], 'FontSize', 8);
+end
+for i = 1:8
+    subplot(2, 8, 8 + i);
+    imagesc(reshape(keepYale.Wopt(:, i), yalH, yalW));
+    colormap gray; axis image off;
+    title(['w_{' num2str(i) '}'], 'FontSize', 8);
+end
+sgtitle('Yale: top row = eigenfaces, bottom row = fisherfaces');
+saveas(gcf, [figDir 's11_yale_eigen_vs_fisher.png']);
+
+% ---------- recognition-rate curves ----------
+figure('Visible', 'off', 'Position', [100 100 950 400]);
+subplot(1, 2, 1);
+plot(ksAll, keepORL.rEig, '-o', ksAll, keepORL.rEig3, '-s', 'LineWidth', 1.4);
+hold on;
+yline(results(1, 5), 'g--', 'LineWidth', 1.8);
+grid on; xlabel('k'); ylabel('recognition rate (%)');
+title('ORL-32');
+legend('eigenfaces', 'eigenfaces w/o top 3', 'fisherfaces (c-1)', 'Location', 'southeast');
+
+subplot(1, 2, 2);
+plot(ksAll, keepYale.rEig, '-o', ksAll, keepYale.rEig3, '-s', 'LineWidth', 1.4);
+hold on;
+yline(results(4, 5), 'g--', 'LineWidth', 1.8);
+grid on; xlabel('k'); ylabel('recognition rate (%)');
+title('Yale-38 (HW3 split)');
+legend('eigenfaces', 'eigenfaces w/o top 3', 'fisherfaces (c-1)', 'Location', 'southeast');
+saveas(gcf, [figDir 's11_rate_curves.png']);
+
+fprintf('  figures written to %s\n', figDir);
+
+%% ====================================================================
+%% S12  NUMERICAL CHECKS
+%
+%  Four independent things are verified here:
+%   (a) the eigenfaces really are orthonormal;
+%   (b) the L = A'*A route agrees with a direct SVD of A;
+%   (c) Fisherfaces are S_W-orthogonal but NOT Euclidean-orthogonal;
+%   (d) the number of useful Fisherfaces is capped at c-1 because
+%       rank(S_B) <= c-1.
+%% ====================================================================
+
+fprintf('\n--- S12: numerical checks ---\n');
+
+% ---- (a) orthonormality of the eigenfaces ----
+U20 = keepORL.U(:, 1:20);
+fprintf('  (a) ||U''U - I||_F for 20 ORL eigenfaces = %.3e\n', ...
+        norm(U20' * U20 - eye(20), 'fro'));
+
+% ---- (b) eig(A''A) route vs direct svd(A) ----
+% The two give the same subspace, but svd works on A directly while the Gram
+% matrix A'*A squares the condition number, so svd is the better-conditioned
+% route.  Eigenvector SIGN is arbitrary, so we compare |u1'*u2|, not u1-u2.
+Aorl = keepORL.Xtr - keepORL.mf;
+[Usvd, ~, ~] = svd(Aorl, 'econ');
+agree = zeros(1, 10);
+for i = 1:10
+    agree(i) = abs(Usvd(:, i)' * keepORL.U(:, i));
+end
+fprintf('  (b) |u_svd . u_eig| for the first 10 components:\n      ');
+fprintf('%.6f ', agree);
+fprintf('\n');
+fprintf('      min over those 10 = %.8f (1.0 means identical direction)\n', min(agree));
+
+% ---- (c) Fisherfaces are S_W-orthogonal, not Euclidean-orthogonal ----
+% Rebuild the ORL scatter matrices in the PCA space to make the point.
+mORL = keepORL.N - keepORL.c;
+Um   = keepORL.U(:, 1:mORL);
+Y    = Um' * Aorl;
+muY  = mean(Y, 2);
+SwO  = zeros(mORL, mORL);
+for i = 1:keepORL.c
+    Yi = Y(:, keepORL.ytr == i);
+    mi = mean(Yi, 2);
+    Di = Yi - mi;
+    SwO = SwO + Di * Di';
+end
+SwO = (SwO + SwO') / 2;
+
+Wf  = keepORL.Wopt;
+WfY = Um' * Wf;                       % the same directions, expressed in PCA space
+G_eu = Wf' * Wf;                      % Euclidean Gram matrix
+G_sw = WfY' * SwO * WfY;              % S_W-weighted Gram matrix
+
+offEu = norm(G_eu - diag(diag(G_eu)), 'fro') / norm(G_eu, 'fro');
+offSw = norm(G_sw - diag(diag(G_sw)), 'fro') / norm(G_sw, 'fro');
+fprintf('  (c) off-diagonal energy of W''W      (Euclidean) = %.3e\n', offEu);
+fprintf('      off-diagonal energy of W''S_W W  (S_W-inner) = %.3e\n', offSw);
+fprintf('      => Fisherfaces are S_W-orthogonal, NOT Euclidean-orthogonal\n');
+
+% ---- (d) the c-1 ceiling ----
+SbO = zeros(mORL, mORL);
+for i = 1:keepORL.c
+    Yi = Y(:, keepORL.ytr == i);
+    ni = size(Yi, 2);
+    mi = mean(Yi, 2);
+    SbO = SbO + ni * (mi - muY) * (mi - muY)';
+end
+SbO = (SbO + SbO') / 2;
+fprintf('  (d) ORL-32: c = %d, so theory says rank(S_B) <= %d\n', keepORL.c, keepORL.c - 1);
+fprintf('      measured rank(S_B) = %d, number of fisherfaces = %d\n', ...
+        rank(SbO), size(keepORL.Wopt, 2));
+
+fprintf('\n=====================================================\n');
+fprintf('  DONE\n');
+fprintf('=====================================================\n');
+
+%% ====================================================================
+%% LOCAL FUNCTIONS
+%  MATLAB requires every local function of a script to appear AFTER all the
+%  executable code, which is why they are all collected down here.
+%% ====================================================================
+
+function [Xtr, ytr, Xte, yte] = loadFaces(folders, numTrain, splitMode, d)
+% LOADFACES  Read PGM images, vectorise them, split into train and test.
+%
+%   folders   cell array of directory paths, one per subject (= per class)
+%   numTrain  how many images of each subject go into the training set
+%   splitMode 'hw3'     keep the order dir() returns (what HW3 did)
+%             'numeric' sort by the number in the filename (ORL only)
+%             'random'  shuffle
+%   d         number of pixels per image
+%
+%   Xtr is d x Ntrain: ONE IMAGE PER COLUMN.  ytr holds the class label.
+
+nF = numel(folders);
+
+% ---- pass 1: count files so we can preallocate ----
+% HW3 grew the matrix with  X = [X, im(:)]  inside the loop, which makes
+% MATLAB reallocate and copy the whole array on every single image.  For
+% Yale that is 1520 copies of a 392 MB matrix.  Counting first and then
+% filling a preallocated array removes that cost entirely.
+nTrainTot = 0;
+nTestTot  = 0;
+for p = 1:nF
+    f  = dir([folders{p} '*.pgm']);
+    nf = numel(f);
+    ntr = min(numTrain, nf);              % a subject may have fewer images
+    nTrainTot = nTrainTot + ntr;
+    nTestTot  = nTestTot  + (nf - ntr);
+end
+
+Xtr = zeros(d, nTrainTot);
+ytr = zeros(1, nTrainTot);
+Xte = zeros(d, nTestTot);
+yte = zeros(1, nTestTot);
+
+% ---- pass 2: actually read the images ----
+a = 0;
+b = 0;
+for p = 1:nF
+    files = dir([folders{p} '*.pgm']);
+    nf    = numel(files);
+
+    order = 1:nf;                          % default: whatever dir() gave us
+    if strcmp(splitMode, 'numeric')
+        % ORL filenames are 1.pgm, 2.pgm, ..., 10.pgm.  dir() sorts them as
+        % TEXT, giving 1,10,2,3,... so we re-sort by the actual number.
+        vals = zeros(1, nf);
+        for j = 1:nf
+            vals(j) = sscanf(files(j).name, '%d');
+        end
+        [~, order] = sort(vals);
+    elseif strcmp(splitMode, 'random')
+        order = randperm(nf);
+    end
+
+    for j = 1:nf
+        im = double(imread([folders{p} files(order(j)).name]));
+        if j <= numTrain
+            a = a + 1;
+            Xtr(:, a) = im(:);             % im(:) stacks the image COLUMN BY COLUMN
+            ytr(a)    = p;
+        else
+            b = b + 1;
+            Xte(:, b) = im(:);
+            yte(b)    = p;
+        end
+    end
+end
+end
+
+
+function [U, lambda, meanFace] = doPCA(X)
+% DOPCA  Principal components of d x M data X (one image per column),
+%        computed with the small-matrix trick L = A'*A.
+%
+%   U        d x M, unit-norm eigenfaces, most important first
+%   lambda   eigenvalues of the covariance C = A*A'/M, descending
+%   meanFace d x 1 mean image
+%
+%  WHY THE TRICK: the covariance C = A*A'/M is d x d.  For Yale d = 32256,
+%  so C has 1.04e9 entries (about 8 GB) -- we cannot even store it.  But A
+%  has only M columns, so L = A'*A is only M x M.  If L*v = lam*v then
+%      A*A'*(A*v) = A*(A'*A*v) = A*(lam*v) = lam*(A*v),
+%  so A*v is an eigenvector of A*A' with the SAME eigenvalue.
+
+[~, M] = size(X);
+
+meanFace = mean(X, 2);
+A = X - meanFace;                % implicit expansion: subtracts from every column
+L = A' * A;                      % M x M, cheap
+
+[V, D] = eig(L);
+
+% eig returns eigenvalues in ASCENDING order.  We want the largest variance
+% directions first, so we must sort descending -- this is not optional.
+[eigvals, idx] = sort(diag(D), 'descend');
+V = V(:, idx);
+
+U = A * V;                       % map back to d-dimensional image space
+
+% A*v has norm sqrt(lam), not 1, so renormalise every column to unit length.
+% After mean subtraction rank(A) <= M-1, so the last eigenvalue is ~0 and the
+% corresponding column is numerical noise; guard against dividing by ~0.
+for i = 1:size(U, 2)
+    nrm = norm(U(:, i));
+    if nrm > 1e-10
+        U(:, i) = U(:, i) / nrm;
+    end
+end
+
+% Eigenvalues of L are M times the eigenvalues of C = A*A'/M.
+lambda = eigvals / M;
+end
+
+
+function rate = nnClassify(trainProj, trainLabels, testProj, testLabels)
+% NNCLASSIFY  Nearest-neighbour classification in the projected space,
+%             using squared Euclidean distance.  Returns a percentage.
+%
+%  We compare SQUARED distances and never take a square root: sqrt is
+%  monotonic, so it cannot change which neighbour is closest, and skipping
+%  it saves one operation per comparison.
+
+correct = 0;
+for i = 1:size(testProj, 2)
+    % trainProj - testProj(:,i) subtracts the test vector from EVERY column
+    % (implicit expansion); sum(...,1) then collapses each column to one
+    % squared distance.
+    distances = sum((trainProj - testProj(:, i)).^2, 1);
+    [~, best] = min(distances);
+    if trainLabels(best) == testLabels(i)
+        correct = correct + 1;
+    end
+end
+rate = 100 * correct / size(testProj, 2);
+end
+
+
+function err = toyError(X1, X2, w)
+% TOYERROR  Project both classes onto direction w, put the threshold
+%           half-way between the two projected means, count mistakes.
+p1  = w' * X1;
+p2  = w' * X2;
+thr = 0.5 * (mean(p1) + mean(p2));
+if mean(p1) < mean(p2)
+    wrong = sum(p1 > thr) + sum(p2 <= thr);
+else
+    wrong = sum(p1 <= thr) + sum(p2 > thr);
+end
+err = wrong / (numel(p1) + numel(p2));
+end
+
+
+function Xn = normCols(X)
+% NORMCOLS  Normalise every image (column) to zero mean and unit norm.
+%
+%  This is what makes nearest neighbour on raw pixels a CORRELATION
+%  classifier: for unit-norm zero-mean vectors a and b,
+%      ||a-b||^2 = 2 - 2*a'*b,
+%  so the smallest Euclidean distance is exactly the largest correlation.
+%  Normalising also removes a constant brightness offset and a global
+%  contrast scaling from each image.
+
+Xn = X - mean(X, 1);              % mean(X,1) is the per-COLUMN (per-image) mean
+for i = 1:size(Xn, 2)
+    nrm = norm(Xn(:, i));
+    if nrm > 1e-10
+        Xn(:, i) = Xn(:, i) / nrm;
+    end
+end
+end
+
+
+function [Wopt, info] = fisherFromPCA(U, meanFace, X, y, m, verbose)
+% FISHERFROMPCA  The Fisherfaces construction, stage 2.
+%
+%  Takes an ALREADY COMPUTED PCA basis U (so that sweeps over m do not
+%  recompute the expensive eigendecomposition) and returns
+%      Wopt = U_m * W_fld      (d x (c-1))
+%  the full projection from pixel space straight to the discriminant space.
+%
+%  Inputs
+%    U         d x M PCA basis from doPCA
+%    meanFace  d x 1
+%    X, y      training images (one per column) and labels
+%    m         how many principal components to keep before LDA
+%              (the paper uses m = N - c)
+%    verbose   0 = no diagnostics (fast, for sweeps)
+%              1 = also compute rank(S_W) and cond(S_W)
+%              2 = additionally cross-check against eig(S_B,S_W,'chol')
+
+classes = unique(y);
+c = numel(classes);
+
+Um = U(:, 1:m);
+A  = X - meanFace;
+Y  = Um' * A;                     % m x N : the training set in PCA space
+
+% ---- scatter matrices, built in the m-dimensional space ----
+muY = mean(Y, 2);
+Sw = zeros(m, m);
+Sb = zeros(m, m);
+for i = 1:c
+    Yi = Y(:, y == classes(i));   % logical indexing picks this class's columns
+    ni = size(Yi, 2);
+    mi = mean(Yi, 2);
+    Di = Yi - mi;
+    Sw = Sw + Di * Di';                       % within-class scatter
+    Sb = Sb + ni * (mi - muY) * (mi - muY)';  % between-class scatter
+end
+
+% Both matrices are symmetric in exact arithmetic but floating point leaves
+% tiny asymmetries, and chol/eig below assume exact symmetry.  Forcing it
+% costs nothing and avoids spurious complex eigenvalues later.
+Sw = (Sw + Sw') / 2;
+Sb = (Sb + Sb') / 2;
+
+% ---- free correctness check: S_T = S_B + S_W ----
+Yc = Y - muY;
+St = Yc * Yc';
+info.resST = norm(St - (Sb + Sw), 'fro') / norm(St, 'fro');
+
+% ---- solve  S_B w = lambda S_W w  by Cholesky whitening ----
+%  Write S_W = R'*R (Cholesky).  Substituting w = inv(R)*z:
+%       S_B inv(R) z = lambda R'R inv(R) z = lambda R' z
+%  and multiplying on the left by inv(R'):
+%       inv(R') S_B inv(R) z = lambda z
+%  which is an ORDINARY eigenproblem for a SYMMETRIC matrix.  That matters:
+%  the obvious alternative inv(S_W)*S_B is NOT symmetric, so round-off can
+%  hand back complex eigenvalues and non-orthogonal eigenvectors.
+[R, p] = chol(Sw);
+info.usedReg = 0;
+if p ~= 0
+    % chol failed => S_W is not numerically positive definite.  Add a small
+    % ridge, scaled to the size of S_W so it is dimensionally sensible.
+    ridge = 1e-6 * trace(Sw) / m;
+    Sw = Sw + ridge * eye(m);
+    [R, p2] = chol(Sw);
+    info.usedReg = 1;
+    if p2 ~= 0
+        error('fisherFromPCA: S_W still not positive definite after ridge');
+    end
+end
+
+% R' \ (Sb / R) computes inv(R')*Sb*inv(R) without ever forming an inverse.
+Minner = (R') \ (Sb / R);
+Minner = (Minner + Minner') / 2;          % re-symmetrise after the solves
+
+[Z, Dz] = eig(Minner);
+[evals, idx] = sort(diag(Dz), 'descend'); % eig is ascending; we want the best first
+Z = Z(:, idx);
+
+% Map back:  w = inv(R) * z, i.e. solve R*w = z.
+% rank(S_B) <= c-1, so only the first c-1 eigenvalues are non-zero: there
+% are AT MOST c-1 useful Fisherfaces, no matter how big m is.
+Wfld = R \ Z(:, 1:(c-1));
+
+Wopt = Um * Wfld;
+
+% Scale each Fisherface to unit norm.  The Fisher criterion is invariant to
+% the scale of each direction, but nearest-neighbour distances are NOT, so we
+% must fix a convention; unit norm is the usual one.
+for i = 1:size(Wopt, 2)
+    nrm = norm(Wopt(:, i));
+    if nrm > 1e-10
+        Wopt(:, i) = Wopt(:, i) / nrm;
+    end
+end
+
+info.evals = evals;
+info.numFisher = size(Wopt, 2);
+
+info.rankSw = NaN;
+info.condSw = NaN;
+info.crossCheck = NaN;
+
+if verbose >= 1
+    % cond(S_W) is the headline number for the "zero slack" argument: at
+    % m = N-c the smallest eigenvalues of S_W are pure estimation noise.
+    info.rankSw = rank(Sw);
+    info.condSw = cond(Sw);
+end
+if verbose >= 2
+    % one-line cross-check against MATLAB's packaged generalised solver.
+    % It should agree to machine precision; if it ever does not, our
+    % whitening algebra is wrong.
+    Wchk = eig(Sb, Sw, 'chol');
+    info.crossCheck = norm(sort(real(Wchk), 'descend') - sort(evals, 'descend')) ...
+                      / norm(evals);
+end
+end

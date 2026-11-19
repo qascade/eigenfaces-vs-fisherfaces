@@ -1,0 +1,27 @@
+# ---------------------------------------------------------------
+# Whitelist approach: ignore everything in this directory, then
+# explicitly un-ignore the project files.  The hw3/ folder also
+# holds the face databases (80 MB) and other coursework material
+# that should not be published.
+# ---------------------------------------------------------------
+*
+
+# the files that make up this repository
+!.gitignore
+!README.md
+
+!fisherfaces_project/
+!fisherfaces_project/**
+!q1_matlab/
+!q1_matlab/**
+
+# LaTeX build artefacts (the compiled PDF IS tracked, on purpose)
+fisherfaces_project/*.aux
+fisherfaces_project/*.toc
+fisherfaces_project/*.log
+fisherfaces_project/*.out
+fisherfaces_project/*.synctex.gz
+
+# macOS
+.DS_Store
+**/.DS_Store
