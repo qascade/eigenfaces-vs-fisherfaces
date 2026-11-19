@@ -2076,6 +2076,34 @@ No. $J(WM)=J(W)$ for any invertible $M$, so LDA determines a subspace, not a
 basis or a scaling. Different correct implementations can produce different-looking
 Fisherface images. (Theorem~\ref{thm:invariance})
 
+\item[Where do the class labels come from?]
+From the directory structure. Both databases ship one folder per person ---
+\texttt{s1}\ldots\texttt{s40} for ORL, \texttt{yaleB01}\ldots\texttt{yaleB39} for
+Yale --- so the folder an image sits in \emph{is} its ground-truth identity. In
+the loader this is the single line \texttt{ytr(a) = p}, where \texttt{p} is the
+subject index. Nobody labels anything by hand; the supervision was free, baked
+into how the data was distributed.
+
+\item[If Eigenfaces is ``unsupervised'', how does it recognise anyone?]
+Because ``unsupervised'' describes only how the \emph{subspace} is built, not the
+whole pipeline. PCA chooses its directions without ever seeing a label --- in our
+code \texttt{doPCA(imgs)} has no label argument at all, so it \emph{cannot} see
+them --- but the nearest-neighbour step that follows does use the training labels,
+since it answers ``whose face is the closest training image?''. So:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & subspace uses labels? & classifier uses labels? \\
+\midrule
+Eigenfaces  & no  & yes \\
+Fisherfaces & yes & yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+Both need labels to name a person. The difference is whether the labels shaped the
+projection. Test labels (\texttt{yte}) are used only to score correctness --- using
+them to classify would be cheating.
+
 \item[When is LDA actually optimal?]
 When the classes are Gaussian with a \emph{shared} covariance and equal priors, the
 Bayes-optimal boundary is linear and LDA finds it. Our toy experiment confirms it:
