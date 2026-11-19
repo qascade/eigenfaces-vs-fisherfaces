@@ -359,6 +359,50 @@ rank(SbO)
 
 ---
 
+## S13 — Why PCA-then-LDA and not another fix
+
+Runs the alternatives side by side on the same split, so the choice of method is
+defended with numbers rather than prose. `ldaVariant(...)` takes a `how`
+argument:
+
+```matlab
+[R, pp] = chol(Sw);
+if pp ~= 0
+    return;                % S_W not positive definite: report failure
+end
+```
+
+**`'chol'` returns `NaN` on failure rather than erroring.** That is the point of
+the section: at `m = N-1` the factorisation *is* refused on both databases, and
+that refusal is the rank theorem `rank(S_W) ≤ N-c` showing up as a numerical
+fact. A section that crashed here would prove the same thing less usefully.
+
+```matlab
+Sw2 = Sw + epsRel * trace(Sw) / m * eye(m);
+```
+
+The ridge is scaled by `trace(Sw)/m` — the mean eigenvalue — so `epsRel` means
+the same thing on both databases. A bare `eps*eye(m)` would be overwhelming on
+one and negligible on the other.
+
+```matlab
+M = pinv(Sw) * Sb;
+[Z, Dz] = eig(M);
+[~, iz] = sort(real(diag(Dz)), 'descend');
+Wf = Vm * real(Z(:, iz(1:(c-1))));
+```
+
+Note the two `real(...)` calls. `pinv(Sw)*Sb` is **not symmetric**, so `eig` can
+return complex eigenvalues and eigenvectors from round-off. Taking real parts
+makes it run, but needing to do so at all is the argument against this route —
+and it is why the main path uses Cholesky whitening, which cannot produce
+complex values.
+
+`rng(0)` is reset before loading, so every variant sees the identical split and
+the comparison is clean.
+
+---
+
 ## Local functions
 
 ### `loadFaces`

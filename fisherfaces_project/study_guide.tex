@@ -1308,27 +1308,118 @@ is a favourite exam trap: \textbf{eigenfaces are orthonormal, Fisherfaces are
 not.}
 \end{observation}
 
-\section{Alternatives we did not use, and why}
+\section{Why PCA-then-LDA, and not one of the other fixes?}
+\label{sec:alternatives}
+
+$\Sw$ is singular, and the two-stage recipe is only one way to cope. This section
+says what the alternatives are, measures them, and is honest about where the
+paper's choice loses.
+
+\subsection{The case for the two-stage recipe}
+
+\begin{enumerate}[leftmargin=*,label=\arabic*.]
+\item \textbf{It is the paper's method, and reproducing the paper is the point of
+  this project.} That is the honest first reason and it should not be dressed up
+  as anything else. A reproduction that silently swaps in a better algorithm has
+  not reproduced anything.
+\item \textbf{It fixes both problems at once.} Recall from Section~11 that $\Sw$
+  has \emph{two} separate defects: it is $d\times d$ (8.3~GB for Yale) and it is
+  rank-deficient. Projecting to $m$ dimensions fixes both. Ridge regularisation
+  applied in pixel space fixes only the rank; the matrix is still $32256^2$ and
+  cannot be formed at all.
+\item \textbf{It has no free parameter.} Once you accept $m=N-c$ there is nothing
+  to tune, so the result is reproducible without a validation set. Every
+  alternative below introduces either an $\varepsilon$ or a choice of $m$, and
+  tuning those on the test set --- which is what we do in the table, for want of a
+  separate validation split --- is optimistic.
+\end{enumerate}
+
+\subsection{What the alternatives actually score}
+
+Section S13 of the script runs them side by side on the same split.
+
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Method & ORL-32 & Yale-38 \\
+\midrule
+PCA to $m=N-c$, plain LDA \quad(\textbf{the paper})   & 90.6 & 95.5 \\
+PCA to tuned $m$, plain LDA                           & \textbf{95.3} ($m{=}60$) & 97.3 ($m{=}519$) \\
+\midrule
+\multicolumn{3}{l}{\emph{keeping $m=N-1$, where $\Sw$ is guaranteed singular:}}\\
+\quad plain LDA                                       & \texttt{chol} fails & \texttt{chol} fails \\
+\quad ridge, $\varepsilon=10^{-8}$                    & 91.4 & 94.9 \\
+\quad ridge, $\varepsilon=10^{-6}$                    & 91.4 & 95.0 \\
+\quad ridge, $\varepsilon=10^{-4}$                    & 91.4 & 95.5 \\
+\quad ridge, $\varepsilon=10^{-2}$                    & 91.4 & \textbf{97.9} \\
+\quad $\Sw^{+}\Sb$ (pseudo-inverse)                   & \textbf{95.3} & 94.3 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{observation}[The rank theorem, visible as a numerical fact]
+At $m=N-1$, \texttt{chol} \emph{fails} on both databases --- the measured condition
+numbers are $8.3\times10^{17}$ and $9.8\times10^{21}$. That is
+Theorem~\ref{thm:rankSw} ($\rank(\Sw)\le N-c$) showing up as a crash rather than
+an inequality: keep even one component more than $N-c$ and $\Sw$ stops being
+invertible. It is the cleanest confirmation of the bound in the whole project.
+\end{observation}
+
+\begin{observation}[The paper's choice is not the best performer]
+Every tuned alternative beats $m=N-c$:
+\begin{itemize}[nosep]
+\item on ORL, $90.6 \to 95.3$ by tuning $m$, or $\to 95.3$ with the pseudo-inverse;
+\item on Yale, $95.5 \to 97.3$ by tuning $m$, or $\to \mathbf{97.9}$ with ridge at
+      $\varepsilon=10^{-2}$ --- the best number anywhere in this project.
+\end{itemize}
+We report this rather than bury it. The recipe's merit is that it is
+parameter-free and principled, not that it wins.
+\end{observation}
+
+\begin{observation}[Why we still did not adopt ridge: look along the rows]
+On ORL every $\varepsilon$ from $10^{-8}$ to $10^{-2}$ gives exactly $91.4\%$ ---
+the answer does not care. On Yale the same sweep runs $94.9 \to 97.9$, a
+3-point spread, and the best value sits at the edge of the range we tried. So
+$\varepsilon$ is inert on one database and decisive on the other, with no way to
+know which case you are in without a validation set. That is the concrete version
+of ``it has to be tuned'', and it is exactly the kind of hidden knob that makes a
+reported number hard to trust.
+\end{observation}
+
+\begin{observation}[And why not the pseudo-inverse]
+$\Sw^{+}\Sb$ is the best method on ORL ($95.3$) and the \emph{worst} on Yale
+($94.3$). It is also the only route here that silently returns complex
+eigenvalues --- $\Sw^{+}\Sb$ is not symmetric, so we have to take real parts, which
+is a warning sign rather than a fix. \texttt{pinv} never complains, and that is
+precisely the danger: it discards the null-space directions instead of inverting
+them, and on Yale those directions carry discriminative information.
+\end{observation}
+
+\subsection{Two further methods we did not implement}
 
 \begin{description}[leftmargin=*,style=nextline]
-\item[Regularised (ridge) LDA: $\Sw+\varepsilon I$.]
-  Add a small multiple of the identity to make $\Sw$ invertible directly in pixel
-  space. Simple and effective, and it is what we fall back to when \texttt{chol}
-  fails. We did not make it the main method because the result depends on
-  $\varepsilon$, which has to be tuned, and because in pixel space the matrix is
-  still $32256^2$ -- it fixes the rank problem but not the size problem.
-\item[Pseudo-inverse: $\Sw^{+}\Sb$.]
-  \texttt{pinv} ignores the null space instead of inverting it. It runs without
-  complaint, which is exactly the danger: it quietly discards the directions where
-  classes are tightest, which are often the most discriminative ones.
 \item[Null-space LDA.]
-  Deliberately works \emph{inside} the null space of $\Sw$, where within-class
-  scatter is zero, and maximises $\Sb$ there. Elegant, and strong when $N$ is very
-  small, but it throws away everything outside the null space.
+  Works \emph{inside} the null space of $\Sw$ --- the directions where
+  within-class scatter is exactly zero --- and maximises $\Sb$ there. The logic is
+  appealing: a direction with zero within-class spread is perfectly discriminative
+  for the training set. We did not implement it because it discards everything
+  \emph{outside} the null space, and because that null space is huge here
+  ($d - (N-c) = 30774$ dimensions for Yale), so ``zero within-class scatter'' is
+  mostly an artefact of having too few samples rather than a real property of
+  faces.
 \item[Direct LDA (Yu \& Yang).]
-  Diagonalises $\Sb$ first and discards \emph{its} null space (which carries no
-  discriminative information by definition), then handles $\Sw$. Avoids the PCA
-  stage entirely.
+  Diagonalises $\Sb$ first and throws away \emph{its} null space --- which is safe,
+  since directions with no between-class scatter carry no discriminative
+  information by definition --- and only then deals with $\Sw$. It avoids the PCA
+  stage entirely, and is the most principled alternative on this list. We left it
+  out for scope: it is a second full algorithm to implement, validate and defend,
+  and it would not change the paper's qualitative conclusion, which is what this
+  project set out to test.
+\end{description}
+
+\subsection{Choices in the classifier, not the subspace}
+
+\begin{description}[leftmargin=*,style=nextline]
 \item[Nearest class centroid instead of nearest neighbour.]
   Compare the projected test image to each class \emph{mean} ($c$ comparisons)
   instead of to every training image ($N$ comparisons). Much faster and more robust
@@ -1945,6 +2036,7 @@ eigenfaces orthonormal              & S12(a) & $\|V^{\!\top} V-I\|_F=9.1\times10
 Fisherfaces $\Sw$-orthogonal        & S12(c) & off-diagonal $3.8\times10^{-13}$ \\
 Fisherfaces \emph{not} Euclidean-orthogonal & S12(c) & off-diagonal $0.499$ \\
 $\rank(\Sb)=c-1$                    & S12(d) & $31 = 31$ \\
+$\Sw$ singular once $m>N-c$         & S13 & \texttt{chol} fails at $m=N-1$, $\kappa\sim10^{18}$--$10^{22}$ \\
 closed-form $w$ maximises $J$       & S1 & beats a 6283-direction grid search \\
 LDA error vs Bayes error            & S1 & $1.70\%$ vs $2.28\%$ theoretical \\
 \bottomrule
@@ -2134,6 +2226,21 @@ conditioned'': at $m=N-c$ the rank equals the dimension exactly, with no slack, 
 the smallest eigenvalues of $\Sw$ are estimation noise and $\Sw^{-1}$ amplifies
 them. Our sweep finds a clearly better $m$ on both databases.
 (Section~\ref{sec:msweep})
+
+\item[Why PCA-then-LDA rather than just regularising $\Sw$?]
+Three reasons, in order of honesty. It is the paper's method and this is a
+reproduction. It fixes \emph{both} of $\Sw$'s defects --- size and rank --- whereas
+a ridge in pixel space fixes only the rank and still leaves an 8.3~GB matrix. And
+it has no free parameter, so the result needs no validation set. Section S13
+measures the alternatives: tuning $m$, or ridge with a well-chosen $\varepsilon$,
+both beat $m=N-c$ (Yale $95.5 \to 97.3$ or $97.9$), so the recipe's merit is that
+it is principled, not that it wins. See Section~\ref{sec:alternatives}.
+
+\item[What happens if you keep more than $N-c$ components?]
+$\Sw$ becomes singular and \texttt{chol} fails outright. We measured it: at
+$m=N-1$, $\kappa(\Sw)$ is $8.3\times10^{17}$ on ORL and $9.8\times10^{21}$ on
+Yale, and the factorisation is refused on both. This is the rank theorem
+$\rank(\Sw)\le N-c$ appearing as a crash rather than an inequality.
 
 \item[Why not just use $\Sw^{-1}\Sb$ and \texttt{eig}?]
 $\Sw^{-1}\Sb$ is not symmetric, so a general eigensolver is used and round-off can

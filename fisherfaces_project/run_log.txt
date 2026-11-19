@@ -161,6 +161,30 @@
   (d) ORL-32: c = 32, so theory says rank(S_B) <= 31
       measured rank(S_B) = 31, number of fisherfaces = 31
 
+--- S13: alternative ways to handle a singular S_W ---
+
+  == ORL-32  ==  (N = 192, c = 32, N-c = 160, N-1 = 191)
+    method                                        rate%    cond(S_W)
+    PCA to N-c, plain LDA   <-- the paper          90.6     7.85e+07
+    PCA to tuned m = 60, plain LDA                 95.3            -
+    PCA to N-1 = 191, plain LDA                chol FAILS     8.26e+17
+       ridge at m = N-1, eps = 1e-08               91.4            -
+       ridge at m = N-1, eps = 1e-06               91.4            -
+       ridge at m = N-1, eps = 1e-04               91.4            -
+       ridge at m = N-1, eps = 1e-02               91.4            -
+       pinv(S_W)*S_B at m = N-1                    95.3            -
+
+  == Yale-38 ==  (N = 1520, c = 38, N-c = 1482, N-1 = 1519)
+    method                                        rate%    cond(S_W)
+    PCA to N-c, plain LDA   <-- the paper          95.5     4.19e+11
+    PCA to tuned m = 519, plain LDA                97.3            -
+    PCA to N-1 = 1519, plain LDA               chol FAILS     9.79e+21
+       ridge at m = N-1, eps = 1e-08               94.9            -
+       ridge at m = N-1, eps = 1e-06               95.0            -
+       ridge at m = N-1, eps = 1e-04               95.5            -
+       ridge at m = N-1, eps = 1e-02               97.9            -
+       pinv(S_W)*S_B at m = N-1                    94.3            -
+
 =====================================================
   DONE
 =====================================================

@@ -848,6 +848,85 @@ fprintf('  (d) ORL-32: c = %d, so theory says rank(S_B) <= %d\n', keepORL.c, kee
 fprintf('      measured rank(S_B) = %d, number of fisherfaces = %d\n', ...
         rank(SbO), size(keepORL.Wopt, 2));
 
+%% ====================================================================
+%% S13  WHY PCA-THEN-LDA, AND NOT ONE OF THE OTHER FIXES?
+%
+%  S_W is singular, and there is more than one way to cope.  This section
+%  measures the main ones side by side so the choice is defended with
+%  numbers rather than opinion:
+%
+%   (a) the paper's recipe  : PCA to m = N-c, then plain LDA
+%   (b) the same, with m tuned by the sweep of S9
+%   (c) keep MORE components (m = N-1, where S_W is guaranteed singular)
+%       and cope with the singularity by
+%          - ridge / regularised LDA:  S_W + eps*I, for several eps
+%          - the pseudo-inverse:       pinv(S_W)*S_B
+%
+%  The chol failure at m = N-1 is itself a result: it is the rank theorem
+%  (rank(S_W) <= N-c) showing up as a numerical fact.
+%% ====================================================================
+
+fprintf('\n--- S13: alternative ways to handle a singular S_W ---\n');
+
+altCfgs = { 'ORL-32 ', orlFolders32, 6,  'hw3',    dORL; ...
+            'Yale-38', yaleFolders,  40, 'random', dYALE };
+
+for ai = 1:size(altCfgs, 1)
+    nameA   = altCfgs{ai, 1};
+    folders = altCfgs{ai, 2};
+    nTrA    = altCfgs{ai, 3};
+    modeA   = altCfgs{ai, 4};
+    dPixA   = altCfgs{ai, 5};
+
+    rng(0);                                   % same split for every variant
+    [imTr, ytr, imTe, yte] = loadFaces(folders, nTrA, modeA, dPixA);
+    N = size(imTr, 2);
+    c = numel(folders);
+    [V, ~, xbar] = doPCA(imTr);
+    X   = imTr - xbar;
+    Xte = imTe - xbar;
+
+    fprintf('\n  == %s ==  (N = %d, c = %d, N-c = %d, N-1 = %d)\n', ...
+            nameA, N, c, N - c, N - 1);
+    fprintf('    %-42s %8s %12s\n', 'method', 'rate%', 'cond(S_W)');
+
+    % (a) the paper
+    [r, cn] = ldaVariant(V, X, Xte, ytr, yte, c, N - c, 'chol', 0);
+    fprintf('    %-42s %8.1f %12.2e\n', 'PCA to N-c, plain LDA   <-- the paper', r, cn);
+
+    % (b) m tuned
+    bestR = 0; bestM = 0;
+    for m = round(linspace(c, N - c, 10))
+        m = max(m, c);
+        r2 = ldaVariant(V, X, Xte, ytr, yte, c, m, 'chol', 0);
+        if ~isnan(r2) && r2 > bestR
+            bestR = r2; bestM = m;
+        end
+    end
+    fprintf('    %-42s %8.1f %12s\n', ...
+            sprintf('PCA to tuned m = %d, plain LDA', bestM), bestR, '-');
+
+    % (c) keep m = N-1, where S_W must be singular
+    m2 = N - 1;
+    [r3, cn3] = ldaVariant(V, X, Xte, ytr, yte, c, m2, 'chol', 0);
+    if isnan(r3)
+        fprintf('    %-42s %8s %12.2e\n', ...
+                sprintf('PCA to N-1 = %d, plain LDA', m2), 'chol FAILS', cn3);
+    else
+        fprintf('    %-42s %8.1f %12.2e\n', ...
+                sprintf('PCA to N-1 = %d, plain LDA', m2), r3, cn3);
+    end
+    for e = [1e-8 1e-6 1e-4 1e-2]
+        r4 = ldaVariant(V, X, Xte, ytr, yte, c, m2, 'ridge', e);
+        fprintf('    %-42s %8.1f %12s\n', ...
+                sprintf('   ridge at m = N-1, eps = %.0e', e), r4, '-');
+    end
+    r5 = ldaVariant(V, X, Xte, ytr, yte, c, m2, 'pinv', 0);
+    fprintf('    %-42s %8.1f %12s\n', '   pinv(S_W)*S_B at m = N-1', r5, '-');
+
+    clear V X Xte imTr imTe;
+end
+
 fprintf('\n=====================================================\n');
 fprintf('  DONE\n');
 fprintf('=====================================================\n');
@@ -1169,4 +1248,69 @@ if verbose >= 2
     info.crossCheck = norm(sort(real(Wchk), 'descend') - sort(evals, 'descend')) ...
                       / norm(evals);
 end
+end
+
+
+function [rate, cnd] = ldaVariant(V, X, Xte, ytr, yte, c, m, how, epsRel)
+% LDAVARIANT  Run LDA in an m-dimensional PCA subspace, coping with a possibly
+%             singular S_W in one of three ways.  Used only by section S13.
+%
+%   how = 'chol'  plain LDA via Cholesky whitening; returns rate = NaN if chol
+%                 fails, which is exactly what happens once m > N-c
+%         'ridge' replace S_W by S_W + epsRel*trace(S_W)/m * I first
+%         'pinv'  solve pinv(S_W)*S_B as an ordinary (non-symmetric) eigenproblem
+
+Vm = V(:, 1:m);
+Al = Vm' * X;                      % eigen-coefficients
+ab = mean(Al, 2);
+
+Sw = zeros(m, m);
+Sb = zeros(m, m);
+for j = 1:c
+    Aj  = Al(:, ytr == j);
+    nj  = size(Aj, 2);
+    muj = mean(Aj, 2);
+    Dj  = Aj - muj;
+    Sw = Sw + Dj * Dj';
+    Sb = Sb + nj * (muj - ab) * (muj - ab)';
+end
+Sw = (Sw + Sw') / 2;
+Sb = (Sb + Sb') / 2;
+cnd  = cond(Sw);
+rate = NaN;
+
+switch how
+    case 'chol'
+        [R, pp] = chol(Sw);
+        if pp ~= 0
+            return;                % S_W not positive definite: report failure
+        end
+        M = (R') \ (Sb / R); M = (M + M') / 2;
+        [Z, Dz] = eig(M);
+        [~, iz] = sort(diag(Dz), 'descend');
+        Wf = Vm * (R \ Z(:, iz(1:(c-1))));
+    case 'ridge'
+        Sw2 = Sw + epsRel * trace(Sw) / m * eye(m);
+        R = chol(Sw2);
+        M = (R') \ (Sb / R); M = (M + M') / 2;
+        [Z, Dz] = eig(M);
+        [~, iz] = sort(diag(Dz), 'descend');
+        Wf = Vm * (R \ Z(:, iz(1:(c-1))));
+    case 'pinv'
+        % pinv(Sw)*Sb is NOT symmetric, so eig can return complex values;
+        % we take the real parts, which is itself part of the argument
+        % against this route.
+        M = pinv(Sw) * Sb;
+        [Z, Dz] = eig(M);
+        [~, iz] = sort(real(diag(Dz)), 'descend');
+        Wf = Vm * real(Z(:, iz(1:(c-1))));
+end
+
+for l = 1:size(Wf, 2)
+    nrm = norm(Wf(:, l));
+    if nrm > 1e-10
+        Wf(:, l) = Wf(:, l) / nrm;
+    end
+end
+rate = nnClassify(Wf' * X, ytr, Wf' * Xte, yte);
 end
