@@ -320,38 +320,32 @@ follows identically.
 
 \subsection{View 3: the SVD}
 
-\begin{gotcha}[Two standard conventions collide on the letter $V$ --- read this first]
-The SVD has its own universally used naming, $X = U\Sigma V^{\!\top}$, and it does
-\emph{not} line up with the PCA naming of the course slides. Inside this
-subsection we use the SVD's own letters, because that is how everyone writes it;
-the dictionary is
+There is a third route to the same eigenfaces, and it turns out to be the
+numerically better one. It needs no new theory --- just the singular value
+decomposition of $X$ and one line of algebra.
+
+\paragraph{The factorisation.} Every matrix has a thin SVD. For our
+$d\times N$ data matrix it reads
+\[
+  X \;=\; U\,\Sigma\,V^{\!\top},
+\]
+and the three factors have concrete meanings here:
 \begin{center}
-\begin{tabular}{lll}
+\begin{tabular}{cll}
 \toprule
-SVD convention & is & in the rest of this guide \\
+Factor & Shape (ORL-32) & What it holds \\
 \midrule
-$U$ \; (left singular vectors of $X$)  & $=$ & $V$, the \textbf{eigenfaces} \\
-$\Sigma$ \; (singular values $\sigma_l$) & $\to$ & $\lambda_l = \sigma_l^2/N$ \\
-$V$ \; (right singular vectors of $X$) & $=$ & $W$, the eigenvectors of $L$ \\
+$U$      & $d\times N$ \;($10304\times192$) & orthonormal columns, one entry per \textbf{pixel} \\
+$\Sigma$ & $N\times N$ \;($192\times192$)   & diagonal, $\sigma_1\ge\sigma_2\ge\cdots\ge0$ \\
+$V$      & $N\times N$ \;($192\times192$)   & orthonormal columns, one entry per \textbf{training image} \\
 \bottomrule
 \end{tabular}
 \end{center}
-The last row of the dictionary is reassuring rather than confusing. The HW3 code
-writes
-\begin{center}\texttt{[V, D] = eig(L)}\end{center}
-and those eigenvectors of $L=X^{\!\top}\!X$ are exactly the SVD's right singular
-vectors. So the code's \texttt{V} and the SVD's
-$V$ already agree; it is only the \emph{slides}, which write $CV=V\Lambda$ for the
-eigenfaces, that use $V$ for the other matrix.
-\end{gotcha}
+Because $U$ has one entry per pixel, each of its columns can be reshaped into a
+picture. $V$ cannot: its columns are patterns across the \emph{data set}, not
+images. Hold on to that distinction --- it is what makes the rest obvious.
 
-Write the thin SVD in its standard form
-\[
-  X \;=\; U\Sigma V^{\!\top},
-\]
-with $U\in\R^{d\times N}$ and $V\in\R^{N\times N}$ having orthonormal columns
-($U^{\!\top}U = I$, $V^{\!\top}V=I$) and $\Sigma$ diagonal with
-$\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
+\paragraph{One line of algebra.} Substitute the factorisation into $C$:
 \[
   C \;=\; \frac1N XX^{\!\top}
     \;=\; \frac1N \bigl(U\Sigma V^{\!\top}\bigr)\bigl(U\Sigma V^{\!\top}\bigr)^{\!\top}
@@ -361,42 +355,51 @@ $\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
 using $V^{\!\top}V=I$, and $\Sigma\Sigma^{\!\top}=\Sigma^2$ because $\Sigma$ is
 diagonal.
 
-Compare that with the eigendecomposition we are after. We want $C$ written as
-(orthonormal matrix)(diagonal)(same matrix transposed), and
-$U(\Sigma^2/N)U^{\!\top}$ is exactly that. So reading it off:
+\paragraph{Reading off the answer.} An eigendecomposition is exactly a product of
+the form (orthonormal matrix)\,(diagonal)\,(the same matrix transposed), and
+$U(\Sigma^2/N)U^{\!\top}$ is of that form. So, with no further work:
 \begin{itemize}[nosep]
-\item the \textbf{left singular vectors of $X$ are the eigenfaces} --- column $l$
-      of $U$ is $V_l$;
-\item the eigenvalues are $\displaystyle \lambda_l \;=\; \frac{\sigma_l^2}{N}$.
+\item \textbf{the columns of $U$ are the eigenfaces} --- which is why they could
+      be reshaped into pictures;
+\item \textbf{the eigenvalues are} $\displaystyle \lambda_l = \sigma_l^2/N$.
 \end{itemize}
 
-\paragraph{And what are the \emph{right} singular vectors?} They are easy to
-overlook, but they are exactly the object the Gram trick computes first. Note
-their shape: for ORL-32, $X$ is $10304\times192$, so $U$ is $10304\times192$ ---
-one entry per \emph{pixel}, so each column is an image --- while $V$ is
-$192\times192$, with one entry per \emph{training image}. A right singular vector
-is therefore not an image at all; it is a pattern across the data set.
-
-Read off column $i$ of $X=U\Sigma V^{\!\top}$: the $i$th mean-deducted image is
+\paragraph{And the columns of $V$?} They are not wasted either. Read off column
+$i$ of $X=U\Sigma V^{\!\top}$: the $i$th mean-deducted image is
 \[
-  \bar{x}_i \;=\; \sum_{l} \sigma_l\, V(i,l)\, U_l ,
+  \bar{x}_i \;=\; \sum_{l} \sigma_l\, V(i,l)\,\bigl(\text{$l$th eigenface}\bigr),
 \]
-and comparing with $\bar{x}_i = \sum_l \alpha_{il} V_l$ from
-Theorem~\ref{thm:recon} gives
+while Theorem~\ref{thm:recon} expands the same image as
+$\bar{x}_i = \sum_l \alpha_{il}\,(\text{$l$th eigenface})$. Two expansions in the
+same basis must have the same coefficients, so
 \[
   \boxed{\;\alpha_{il} \;=\; \sigma_l\, V(i,l)\;}
 \]
-\textbf{The right singular vectors are the eigen-coefficients, up to a scale
-factor.} Entry $V(i,l)$ says how strongly training image $i$ uses eigenface $l$;
-column $l$ of $V$ says how the whole gallery loads onto eigenface $l$. We checked
-this numerically on ORL-32: the largest discrepancy between $\alpha$ and
-$\Sigma V^{\!\top}$ over all $192\times192$ entries is $2.2\times10^{-11}$.
+\textbf{The columns of $V$ are the eigen-coefficients, up to a scale factor.}
+Entry $V(i,l)$ says how strongly training image $i$ uses eigenface $l$; column $l$
+says how the whole gallery loads onto eigenface $l$. Checked numerically on
+ORL-32: the largest discrepancy between $\alpha$ and $\Sigma V^{\!\top}$ over all
+$192\times192$ entries is $2.2\times10^{-11}$.
 
-This also closes the loop with Section~\ref{sec:gram}: the eigenvectors $w$ of
-$L=X^{\!\top}\!X$ \emph{are} the right singular vectors (we measured
+That also closes the loop with Section~\ref{sec:gram}. The eigenvectors $w$ of
+$L=X^{\!\top}\!X$ \emph{are} these columns of $V$ (measured:
 $|v_l^{\!\top}w_l| = 1.000000$ for $l=1\ldots5$), and $\sigma_l=\sqrt{\lambda_l(L)}$.
-So the trick computes the cheap $N\times N$ side first and then maps it to the
-expensive $d\times N$ side with a single matrix product $Xw$.
+So the Gram trick computes the cheap $N\times N$ side of the SVD first, then maps
+it to the expensive $d\times N$ side with the single product $Xw$.
+
+\begin{gotcha}[A clash of conventions, for when you compare sources]
+This subsection uses the SVD's own universal naming, $X=U\Sigma V^{\!\top}$. The
+course slides name the same objects differently, writing $CV=V\Lambda$, so their
+$V$ is the \emph{eigenface} matrix --- the one called $U$ here. Nothing is wrong
+in either place; the two conventions simply collide on one letter. The safe habit
+is to say what a matrix \emph{contains} rather than name it: ``the eigenfaces''
+and ``the per-image coefficients'' are unambiguous, ``$V$'' is not.
+
+One reassurance: the MATLAB code sides with the SVD. It writes
+\texttt{[V, D] = eig(L)}, and those eigenvectors of $L=X^{\!\top}\!X$ are the SVD's
+right singular vectors, so the code's \texttt{V} and the SVD's $V$ already mean
+the same thing.
+\end{gotcha}
 
 So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $X$
 directly. Section~\ref{sec:eigvssvd} explains why the SVD route is numerically
