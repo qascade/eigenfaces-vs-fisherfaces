@@ -927,6 +927,77 @@ for ai = 1:size(altCfgs, 1)
     clear V X Xte imTr imTe;
 end
 
+%% ====================================================================
+%% S14  EIGENFACES vs FISHERFACES: IS "HIGH FREQUENCY" MEASURABLE?
+%
+%  Section S11 shows that eigenfaces look smooth and Fisherfaces look
+%  noisy.  That should not rest on an impression, and it is not merely an
+%  observation either -- it is predictable.  Whitening maps direction l to
+%  1/sqrt(lambda_l) times itself, so the SMALLEST-variance directions of
+%  S_W are amplified most; and the smallest-variance within-class
+%  directions are the fine-detail (high spatial frequency) ones.  So
+%  Fisherfaces must come out high frequency.
+%
+%  We measure two things per basis image, via its 2-D FFT:
+%     freq centroid = power-weighted mean radial spatial frequency
+%     %hi           = share of power above a radial cutoff of 0.15
+%  and we check the mechanism by measuring the frequency of S_W's own
+%  eigen-directions as a function of their eigenvalue rank.
+%% ====================================================================
+
+fprintf('\n--- S14: frequency content of the two bases (ORL-32) ---\n');
+
+Hs = orlH; Ws = orlW;
+[fy, fx] = ndgrid((0:Hs-1)/Hs, (0:Ws-1)/Ws);
+fy = min(fy, 1-fy); fx = min(fx, 1-fx);
+radGrid = sqrt(fy.^2 + fx.^2);
+
+nShow = 10;
+ceV = zeros(1,nShow); heV = zeros(1,nShow);
+cfV = zeros(1,nShow); hfV = zeros(1,nShow);
+for l = 1:nShow
+    [ceV(l), heV(l)] = specStats(keepORL.V(:, l),    Hs, Ws, radGrid);
+    [cfV(l), hfV(l)] = specStats(keepORL.Wopt(:, l), Hs, Ws, radGrid);
+end
+fprintf('    l   eigenface: centroid  %%hi     fisherface: centroid  %%hi\n');
+for l = 1:nShow
+    fprintf('   %2d            %6.4f  %5.1f                 %6.4f  %5.1f\n', ...
+            l, ceV(l), 100*heV(l), cfV(l), 100*hfV(l));
+end
+fprintf('   MEAN          %6.4f  %5.1f                 %6.4f  %5.1f\n', ...
+        mean(ceV), 100*mean(heV), mean(cfV), 100*mean(hfV));
+fprintf('   => Fisherfaces sit %.2fx higher in frequency than eigenfaces\n', ...
+        mean(cfV)/mean(ceV));
+
+% ---- the mechanism: S_W's small-eigenvalue directions are the fine ones ----
+mO  = keepORL.N - keepORL.c;
+VmO = keepORL.V(:, 1:mO);
+AlO = VmO' * (keepORL.imTr - keepORL.xbar);
+abO = mean(AlO, 2);
+SwO = zeros(mO, mO);
+for j = 1:keepORL.c
+    Aj = AlO(:, keepORL.ytr == j);
+    Dj = Aj - mean(Aj, 2);
+    SwO = SwO + Dj * Dj';
+end
+SwO = (SwO + SwO') / 2;
+[Qs, Ds] = eig(SwO);
+[evS, si] = sort(diag(Ds), 'descend');
+Qs = Qs(:, si);
+fprintf('\n   S_W eigenvalues: largest %.3e, smallest %.3e, ratio %.2e\n', ...
+        evS(1), evS(end), evS(1)/evS(end));
+fprintf('   whitening scales direction l by 1/sqrt(lambda_l), so the smallest\n');
+fprintf('   gets amplified ~%.0fx relative to the largest.\n', sqrt(evS(1)/evS(end)));
+fprintf('   frequency centroid of S_W directions, by eigenvalue rank:\n');
+for pick = [1 5 20 80 mO]
+    v = VmO * Qs(:, pick);
+    v = v / norm(v);
+    cc = specStats(v, Hs, Ws, radGrid);
+    fprintf('      rank %3d  (lambda = %.3e) : centroid %.4f\n', pick, evS(pick), cc);
+end
+fprintf('   => low rank (big lambda) is smooth, high rank (small lambda) is fine\n');
+fprintf('      detail, so inverting S_W pushes energy into the fine directions.\n');
+
 fprintf('\n=====================================================\n');
 fprintf('  DONE\n');
 fprintf('=====================================================\n');
@@ -1313,4 +1384,15 @@ for l = 1:size(Wf, 2)
     end
 end
 rate = nnClassify(Wf' * X, ytr, Wf' * Xte, yte);
+end
+
+
+function [centroid, hiShare] = specStats(v, H, W, radGrid)
+% SPECSTATS  Spatial-frequency summary of one basis image.
+%   centroid  power-weighted mean radial frequency (0 = flat, larger = finer)
+%   hiShare   fraction of power above a radial frequency of 0.15
+P = abs(fft2(reshape(v, H, W))).^2;
+tot = sum(P(:));
+centroid = sum(sum(P .* radGrid)) / tot;
+hiShare  = sum(sum(P .* (radGrid > 0.15))) / tot;
 end
