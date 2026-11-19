@@ -320,20 +320,56 @@ follows identically.
 
 \subsection{View 3: the SVD}
 
-Write the thin SVD $X = V\Sigma Q^{\!\top}$, with $V\in\R^{d\times N}$ and
-$Q\in\R^{N\times N}$ having orthonormal columns and $\Sigma$ diagonal with
+\begin{gotcha}[Two standard conventions collide on the letter $V$ --- read this first]
+The SVD has its own universally used naming, $X = U\Sigma V^{\!\top}$, and it does
+\emph{not} line up with the PCA naming of the course slides. Inside this
+subsection we use the SVD's own letters, because that is how everyone writes it;
+the dictionary is
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+SVD convention & is & in the rest of this guide \\
+\midrule
+$U$ \; (left singular vectors of $X$)  & $=$ & $V$, the \textbf{eigenfaces} \\
+$\Sigma$ \; (singular values $\sigma_l$) & $\to$ & $\lambda_l = \sigma_l^2/N$ \\
+$V$ \; (right singular vectors of $X$) & $=$ & $W$, the eigenvectors of $L$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+The last row of the dictionary is reassuring rather than confusing. The HW3 code
+writes
+\begin{center}\texttt{[V, D] = eig(L)}\end{center}
+and those eigenvectors of $L=X^{\!\top}\!X$ are exactly the SVD's right singular
+vectors. So the code's \texttt{V} and the SVD's
+$V$ already agree; it is only the \emph{slides}, which write $CV=V\Lambda$ for the
+eigenfaces, that use $V$ for the other matrix.
+\end{gotcha}
+
+Write the thin SVD in its standard form
+\[
+  X \;=\; U\Sigma V^{\!\top},
+\]
+with $U\in\R^{d\times N}$ and $V\in\R^{N\times N}$ having orthonormal columns
+($U^{\!\top}U = I$, $V^{\!\top}V=I$) and $\Sigma$ diagonal with
 $\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
 \[
   C \;=\; \frac1N XX^{\!\top}
-    \;=\; \frac1N \bigl(V\Sigma Q^{\!\top}\bigr)\bigl(V\Sigma Q^{\!\top}\bigr)^{\!\top}
-    \;=\; \frac1N V\Sigma \underbrace{Q^{\!\top}Q}_{=\,I}\,\Sigma^{\!\top} V^{\!\top}
-    \;=\; V\frac{\Sigma^2}{N}V^{\!\top},
+    \;=\; \frac1N \bigl(U\Sigma V^{\!\top}\bigr)\bigl(U\Sigma V^{\!\top}\bigr)^{\!\top}
+    \;=\; \frac1N U\Sigma \underbrace{V^{\!\top}V}_{=\,I}\,\Sigma^{\!\top} U^{\!\top}
+    \;=\; U\,\frac{\Sigma^2}{N}\,U^{\!\top},
 \]
-using $Q^{\!\top}Q=I$ and $\Sigma$ diagonal, so $\Sigma\Sigma^{\!\top}=\Sigma^2$. This is already an eigendecomposition of $C$: the left
-singular vectors of $X$ \emph{are} the eigenfaces, and
-\[
-  \lambda_l = \frac{\sigma_l^2}{N}.
-\]
+using $V^{\!\top}V=I$, and $\Sigma\Sigma^{\!\top}=\Sigma^2$ because $\Sigma$ is
+diagonal.
+
+Compare that with the eigendecomposition we are after. We want $C$ written as
+(orthonormal matrix)(diagonal)(same matrix transposed), and
+$U(\Sigma^2/N)U^{\!\top}$ is exactly that. So reading it off:
+\begin{itemize}[nosep]
+\item the \textbf{left singular vectors of $X$ are the eigenfaces} --- column $l$
+      of $U$ is $V_l$;
+\item the eigenvalues are $\displaystyle \lambda_l \;=\; \frac{\sigma_l^2}{N}$.
+\end{itemize}
+
 So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $X$
 directly. Section~\ref{sec:eigvssvd} explains why the SVD route is numerically
 safer, and shows the two agreeing in our code.
