@@ -965,13 +965,24 @@ W = W(:, idx);
 
 V = X * W;                       % map back to d-dimensional image space
 
-% X*w has norm sqrt(lam), not 1, so renormalise every column to unit length.
-% After mean subtraction rank(X) <= N-1, so the last eigenvalue is ~0 and the
-% corresponding column is numerical noise; guard against dividing by ~0.
+% X*w has norm sqrt(lam), not 1 (eig already returns w with norm 1), so every
+% column must be rescaled to unit length.  Dividing a VECTOR by the SCALAR
+% norm(V(:,l)) leaves its direction alone and makes its length exactly 1.
+%
+% After mean subtraction rank(X) <= N-1, so the last eigenvalue is numerically
+% zero (on ORL-32 it comes out as -1.1e-06, i.e. slightly negative) and the
+% corresponding column is pure round-off.  Its norm is tiny but NOT tiny in an
+% absolute sense -- on ORL-32 it is 1.95e-09, while the leading column has norm
+% 2.37e+04.  So the threshold has to be RELATIVE to the data scale; an absolute
+% 1e-10 would never fire here and would happily blow a round-off column up to
+% unit length.  We compare against the largest column norm instead.
+scale = norm(V(:, 1));                 % largest column norm = sqrt(lambda_1)
 for l = 1:size(V, 2)
     nrm = norm(V(:, l));
-    if nrm > 1e-10
+    if nrm > 1e-10 * scale
         V(:, l) = V(:, l) / nrm;
+    else
+        V(:, l) = 0;                   % numerically-zero direction: do not use
     end
 end
 

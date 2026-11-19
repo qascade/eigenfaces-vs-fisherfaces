@@ -370,11 +370,39 @@ $U(\Sigma^2/N)U^{\!\top}$ is exactly that. So reading it off:
 \item the eigenvalues are $\displaystyle \lambda_l \;=\; \frac{\sigma_l^2}{N}$.
 \end{itemize}
 
+\paragraph{And what are the \emph{right} singular vectors?} They are easy to
+overlook, but they are exactly the object the Gram trick computes first. Note
+their shape: for ORL-32, $X$ is $10304\times192$, so $U$ is $10304\times192$ ---
+one entry per \emph{pixel}, so each column is an image --- while $V$ is
+$192\times192$, with one entry per \emph{training image}. A right singular vector
+is therefore not an image at all; it is a pattern across the data set.
+
+Read off column $i$ of $X=U\Sigma V^{\!\top}$: the $i$th mean-deducted image is
+\[
+  \bar{x}_i \;=\; \sum_{l} \sigma_l\, V(i,l)\, U_l ,
+\]
+and comparing with $\bar{x}_i = \sum_l \alpha_{il} V_l$ from
+Theorem~\ref{thm:recon} gives
+\[
+  \boxed{\;\alpha_{il} \;=\; \sigma_l\, V(i,l)\;}
+\]
+\textbf{The right singular vectors are the eigen-coefficients, up to a scale
+factor.} Entry $V(i,l)$ says how strongly training image $i$ uses eigenface $l$;
+column $l$ of $V$ says how the whole gallery loads onto eigenface $l$. We checked
+this numerically on ORL-32: the largest discrepancy between $\alpha$ and
+$\Sigma V^{\!\top}$ over all $192\times192$ entries is $2.2\times10^{-11}$.
+
+This also closes the loop with Section~\ref{sec:gram}: the eigenvectors $w$ of
+$L=X^{\!\top}\!X$ \emph{are} the right singular vectors (we measured
+$|v_l^{\!\top}w_l| = 1.000000$ for $l=1\ldots5$), and $\sigma_l=\sqrt{\lambda_l(L)}$.
+So the trick computes the cheap $N\times N$ side first and then maps it to the
+expensive $d\times N$ side with a single matrix product $Xw$.
+
 So PCA can be done either by eigendecomposing $C$ or by taking the SVD of $X$
 directly. Section~\ref{sec:eigvssvd} explains why the SVD route is numerically
 safer, and shows the two agreeing in our code.
 
-\section{The \texorpdfstring{$L=X^{\!\top}\!X$}{L = X'X} trick}
+\section{The \texorpdfstring{$L=X^{\!\top}\!X$}{L = X'X} trick}\label{sec:gram}
 
 \paragraph{The problem.} $C$ is $d\times d$. For Yale, $d=32256$, so $C$ has
 $32256^2 = 1.04\times 10^9$ entries. At 8 bytes each that is $\mathbf{8.3}$~GB --
@@ -1330,14 +1358,17 @@ it is misused.
   dimensions must equal \texttt{numel(v)} or it errors. Swapping the two numbers
   does \emph{not} error -- it silently produces a scrambled image, which is why the
   height/width pair must always travel together.
-\item[\texttt{X(:, i)}] Column $i$ of \texttt{X}: in our layout, image $i$.
-  \texttt{X(i, :)} would be row $i$: pixel $i$ across all images.
+\item[\texttt{X(:, i)}] Column $i$ of \texttt{X}: in our layout, the $i$th
+  \emph{mean-deducted} image $\bar{x}_i$ (the raw images live in
+  \texttt{imgs}/\texttt{imTr}). \texttt{X(i, :)} would be row $i$: pixel $i$
+  across all images.
 \item[\texttt{X(4:k, :)}] Rows $4$ through $k$, all columns. This is how we drop
   the top three eigencoefficients -- we keep rows $4\ldots k$ of the projected
   data.
-\item[\texttt{Y(:, y == i)}] \textbf{Logical indexing.} \texttt{y == i} produces a
-  vector of \texttt{true}/\texttt{false}, and using it as an index keeps only the
-  columns where it is \texttt{true}. This is how we select one class's images.
+\item[\texttt{Alpha(:, y == j)}] \textbf{Logical indexing.} \texttt{y == j}
+  produces a vector of \texttt{true}/\texttt{false}, and using it as an index keeps
+  only the columns where it is \texttt{true}. This is how we select the
+  eigen-coefficients belonging to class $j$.
 \item[\texttt{find(y == i)}] Returns the integer \emph{positions} where the
   condition holds, rather than a logical mask. We use it when we need the indices
   themselves (e.g.\ to write back into the same columns).
@@ -1348,17 +1379,67 @@ it is misused.
   and copy everything on \emph{every} iteration.
 \end{description}
 
+\subsection{Reading a loop and an index}
+
+Every indexing construct in the script can be read off the same way. Take the
+normalisation loop, which is the densest line-for-line:
+\begin{lstlisting}
+for l = 1:size(V, 2)
+    nrm = norm(V(:, l));
+    if nrm > 1e-10 * scale
+        V(:, l) = V(:, l) / nrm;
+    end
+end
+\end{lstlisting}
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Piece & How to read it \\
+\midrule
+\texttt{size(V, 2)}     & size of \texttt{V} along dimension \textbf{2} = number of \textbf{columns} \\
+\texttt{size(V, 1)}     & \ldots along dimension 1 = number of rows \\
+\texttt{1:size(V, 2)}   & the colon \emph{operator}: builds the vector $[1\;2\;\ldots\;n_{\text{col}}]$ \\
+\texttt{for l = \ldots} & \texttt{l} takes each of those values in turn, one pass per column \\
+\texttt{V(:, l)}        & colon \emph{alone} = ``all of this dimension'': all rows, column $l$ \\
+\texttt{V(l, :)}        & row $l$ instead \\
+\texttt{V(i, l)}        & a single entry \\
+\texttt{V(:, l) = \ldots} & assign \emph{into} column $l$, leaving the rest of \texttt{V} alone \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+In words: \emph{for each column index $l$, take column $l$, measure its length,
+and if that length is big enough, replace column $l$ by itself divided by that
+length.} Because \texttt{V(:, l)} is one eigenface, the loop is ``rescale every
+eigenface to unit length''.
+
+\begin{gotcha}
+Three things to keep straight.
+\emph{First}, MATLAB indexes from \textbf{1}, not 0, so the first column is
+\texttt{V(:,1)}.
+\emph{Second}, \texttt{norm(V(:, l))} returns a \textbf{scalar} while
+\texttt{V(:, l)} is a \textbf{vector}, so \texttt{V(:, l) / nrm} is a vector
+divided by a number --- the result is a vector of length 1, not the number 1. The
+direction is untouched; only the length changes. (This is worth saying out loud
+because ``divide by its own norm'' sounds circular until you notice the two
+objects have different types.)
+\emph{Third}, the loop variable name carries no meaning to MATLAB. We write
+\texttt{l} because $l$ indexes components in this document; \texttt{for i} would
+behave identically.
+\end{gotcha}
+
 \subsection{Implicit expansion (broadcasting)}
 
-\texttt{trainImages - meanFace} subtracts a $d\times1$ column from a $d\times N$
+\texttt{imgs - xbar} subtracts a $d\times1$ column from a $d\times N$
 matrix. MATLAB automatically replicates the column across all $N$ columns. This is
 \emph{implicit expansion}, available since R2016b; older code needed
 \texttt{bsxfun} or \texttt{repmat}.
 
 \begin{gotcha}
 Implicit expansion triggers whenever a dimension is $1$, which makes shape mistakes
-silent rather than loud. If \texttt{meanFace} were accidentally $1\times d$ (a row)
-instead of $d\times1$, then \texttt{X - meanFace} would not error -- it would
+silent rather than loud. If \texttt{xbar} were accidentally $1\times d$ (a row)
+instead of $d\times1$, then \texttt{imgs - xbar} would not error -- it would
 expand in the \emph{wrong direction} and build a $d\times d$ matrix. For Yale that
 is an attempt to allocate $8.3$~GB. Always check orientation with
 \texttt{size()} when something is unexpectedly slow or out of memory.
