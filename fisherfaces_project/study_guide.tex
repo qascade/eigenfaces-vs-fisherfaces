@@ -153,6 +153,53 @@ column} (``column-major'' order). The inverse is
 \texttt{reshape(v, height, width)}. The two must always be used as a matched pair;
 reshaping with the width and height swapped gives a scrambled image.
 
+\section{The two databases}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{lll}
+\toprule
+ & \textbf{ORL (AT\&T)} & \textbf{Cropped Extended Yale B} \\
+\midrule
+Image size        & $92\times112 = 10304$ px & $168\times192 = 32256$ px \\
+Subjects          & $40$                     & $38$ (\texttt{yaleB14} absent) \\
+Images per subject& exactly $10$             & $59$--$64$, \emph{not} constant \\
+Total images      & $400$                    & $2414$ \\
+Pose              & varies (tilt, rotation)  & \textbf{fixed} --- every file is \texttt{P00} \\
+Expression        & varies                   & fixed \\
+Glasses           & varies                   & fixed \\
+Lighting          & essentially constant     & \textbf{the only thing that varies} \\
+\bottomrule
+\end{tabular}
+\caption{The two databases are near-complements: ORL varies everything
+\emph{except} lighting, Yale varies \emph{only} lighting. That is what makes the
+pair a controlled experiment rather than two arbitrary datasets.}
+\label{tab:datasets}
+\end{table}
+
+Yale encodes the lamp position in the filename as
+\texttt{A$\pm$azimuth\,E$\pm$elevation}: azimuth spans $-130^\circ$ to $+130^\circ$
+(29 distinct values) and elevation $-40^\circ$ to $+90^\circ$ (12 values). Binned
+by angle from the optical axis into the paper's standard subsets, subject 1's 64
+images split as $7$ at $\le12^\circ$, $12$ at $\le25^\circ$, $10$ at $\le50^\circ$,
+$16$ at $\le77^\circ$ and $\mathbf{19}$ beyond $77^\circ$. Nearly a third of the
+database is lit from more than $77^\circ$ off-axis, which is why some frames in
+Figure~\ref{fig:datasets} are almost entirely black.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\textwidth]{figs/s0_datasets.png}
+\caption{Top: all ten images of ORL subject 1 --- the face tilts, the expression
+changes, glasses come and go, but the lighting is flat throughout. Middle and
+bottom: one Yale subject in a \emph{single} pose, under an azimuth sweep and an
+elevation sweep. Nothing about the face changes; only the lamp moves. At
+$\pm120^\circ$ azimuth, or $+90^\circ$ elevation, most of the face carries no
+information at all --- those pixels are not merely re-shaded, they are dark, which
+is why no purely linear correction can fully undo extreme illumination.}
+\label{fig:datasets}
+\end{figure}
+
 \part{Eigenfaces: revision, derivations and gotchas}
 
 \section{PCA from first principles}
@@ -1957,24 +2004,97 @@ eight Fisherfaces.}
 \end{figure}
 
 \begin{observation}
-The two sets of images look completely different, and the difference is exactly
-what the theory predicts.
+The two sets of images look completely different.
 
-\textbf{Eigenfaces} are smooth and face-like, with large soft gradients across the
-whole image. They are the directions of greatest variance, and the leading ones are
-dominated by broad left-right and top-bottom lighting gradients -- you can
-practically read the light source position off the first few.
+\textbf{Eigenfaces} are smooth and face-like, with broad soft gradients. They are
+the directions of greatest variance, and on Yale the leading ones are dominated by
+left--right and top--bottom lighting gradients --- you can practically read the
+lamp position off the first few.
 
-\textbf{Fisherfaces} are high-frequency, noisy and much less recognisable as faces.
-This is not a bug. They are optimised to \emph{separate identities}, not to
-reconstruct images, so they emphasise small localised differences between people
-and actively cancel the large lighting directions. A Fisherface is closer to a
-difference-of-faces template than to a face.
-
-This also explains why Fisherfaces are useless for compression: there is no
-reconstruction guarantee analogous to Theorem~\ref{thm:recon}, because LDA never
-optimised for one.
+\textbf{Fisherfaces} are high-frequency, speckled, and much less recognisable as
+faces. On ORL the leading eigenfaces instead show pose and expression changes,
+since ORL has almost no lighting variation --- which is the same fact that makes
+``drop the top 3'' help on Yale and hurt on ORL.
 \end{observation}
+
+\subsection{This is predicted, not just observed}
+
+It would be weak to leave that as an impression. The high-frequency look of the
+Fisherfaces is a \emph{consequence} of the whitening step, and the argument is
+short.
+
+A Fisherface is $w_l = R^{-1}z_l$, where $\Sw = R^{\!\top}R$. Work in the
+eigenbasis of $\Sw$: if $\Sw q = \lambda q$, then applying $R^{-1}$ scales that
+direction by $1/\sqrt{\lambda}$. So whitening \textbf{amplifies the
+smallest-variance directions of $\Sw$ the most}. Now ask what those directions
+look like:
+\begin{itemize}[nosep]
+\item $\Sw$'s \emph{large}-$\lambda$ directions are the ways one person's images
+      differ most from each other --- broad shading, overall brightness, slight
+      shifts. Those are \textbf{low spatial frequency}.
+\item $\Sw$'s \emph{small}-$\lambda$ directions are where a person barely varies
+      at all: fine detail, pixel-scale texture. Those are \textbf{high spatial
+      frequency}.
+\end{itemize}
+Whitening divides by $\sqrt{\lambda}$, so it suppresses the first group and
+inflates the second. A Fisherface therefore \emph{has} to come out
+high-frequency. No experiment is needed to anticipate it.
+
+\begin{observation}[Both halves of that argument, measured on ORL-32 (S14)]
+Each basis image is Fourier-transformed; ``centroid'' is its power-weighted mean
+radial spatial frequency and ``\%hi'' the share of power above a radial cutoff of
+$0.15$.
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+mean over the first 10 & frequency centroid & \%\,power at high frequency \\
+\midrule
+eigenfaces   & $0.0306$ & $2.3\%$ \\
+Fisherfaces  & $0.1178$ & $25.9\%$ \\
+\midrule
+ratio        & $\mathbf{3.85\times}$ & $11\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+So ``they look noisy'' is worth $3.85\times$ in frequency centroid and an
+eleven-fold increase in high-frequency power share.
+
+And the mechanism itself checks out. Measuring the frequency centroid of $\Sw$'s
+own eigen-directions, ordered by eigenvalue:
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+rank of $\lambda$ & 1 & 5 & 20 & 80 \\
+$\lambda$         & $9.99\times10^{7}$ & $4.14\times10^{7}$ & $1.18\times10^{7}$ & $3.27\times10^{6}$ \\
+centroid          & $0.0226$ & $0.0378$ & $0.0834$ & $0.1673$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Large eigenvalue means smooth, small eigenvalue means fine detail, exactly as the
+argument requires. And since
+$\lambda_{\max}/\lambda_{\min} = 7.85\times10^{7}$ here, whitening amplifies the
+finest direction by about $\sqrt{7.85\times10^{7}} \approx 8860$ relative to the
+smoothest.
+\end{observation}
+
+\begin{gotcha}
+The trend is not perfectly monotonic at the very tail: rank $160$ (the last, with
+$\lambda = 1.27$) has centroid $0.1166$, slightly \emph{below} rank $80$. That is
+not a counterexample to the argument --- it is the zero-slack problem of
+Section~\ref{sec:zeroslack} again. At $m=N-c$ the last directions of $\Sw$ are
+estimated from almost no data, so their frequency content is as noisy as
+everything else about them. The clean part of the trend is ranks 1--80.
+\end{gotcha}
+
+\paragraph{What genuinely does need the pictures.} The argument above predicts
+\emph{that} Fisherfaces are high-frequency and \emph{that} eigenfaces are smooth.
+It does not predict \emph{where} on the face the discriminative energy lands
+(around the eyes and nose bridge, as the figures show), nor whether a given
+database's leading eigenfaces will encode lighting or pose --- that depends on
+which nuisance dominates, which is a property of the data and not of the method.
+Those two things are what the figures are for.
+
+
 
 \begin{figure}[htbp]
 \centering

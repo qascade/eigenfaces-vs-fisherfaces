@@ -185,6 +185,33 @@
        ridge at m = N-1, eps = 1e-02               97.9            -
        pinv(S_W)*S_B at m = N-1                    94.3            -
 
+--- S14: frequency content of the two bases (ORL-32) ---
+    l   eigenface: centroid  %hi     fisherface: centroid  %hi
+    1            0.0149    0.5                 0.1166   26.0
+    2            0.0162    1.3                 0.1109   24.4
+    3            0.0300    2.4                 0.1149   24.1
+    4            0.0235    1.1                 0.1229   28.2
+    5            0.0285    2.3                 0.1301   30.2
+    6            0.0320    2.2                 0.1257   27.7
+    7            0.0364    2.7                 0.1093   22.2
+    8            0.0391    2.4                 0.1192   27.1
+    9            0.0415    3.8                 0.1186   26.0
+   10            0.0438    3.9                 0.1099   23.5
+   MEAN          0.0306    2.3                 0.1178   25.9
+   => Fisherfaces sit 3.85x higher in frequency than eigenfaces
+
+   S_W eigenvalues: largest 9.985e+07, smallest 1.272e+00, ratio 7.85e+07
+   whitening scales direction l by 1/sqrt(lambda_l), so the smallest
+   gets amplified ~8860x relative to the largest.
+   frequency centroid of S_W directions, by eigenvalue rank:
+      rank   1  (lambda = 9.985e+07) : centroid 0.0226
+      rank   5  (lambda = 4.137e+07) : centroid 0.0378
+      rank  20  (lambda = 1.181e+07) : centroid 0.0834
+      rank  80  (lambda = 3.272e+06) : centroid 0.1673
+      rank 160  (lambda = 1.272e+00) : centroid 0.1166
+   => low rank (big lambda) is smooth, high rank (small lambda) is fine
+      detail, so inverting S_W pushes energy into the fine directions.
+
 =====================================================
   DONE
 =====================================================
