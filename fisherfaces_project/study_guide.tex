@@ -177,7 +177,7 @@ step the first ``principal component'' would simply point at the mean face, beca
 that is the direction in which the raw vectors are biggest, and it would tell us
 nothing about how faces differ from one another.
 
-\subsection{View 1: maximise the variance of the projection}
+\subsection{View 1: maximise the variance of the projection}\label{sec:view1}
 
 Project every centred image onto a unit vector $u$ (so $u^{\!\top} u = 1$). Image
 $i$ becomes the single number $u^{\!\top} \bar{x}_i$. The mean of these numbers is
@@ -239,36 +239,84 @@ $\lambda_l$ literally is the variance captured by eigenvector $V_l$.
 
 \subsection{View 2: minimise the reconstruction error}
 
-Suppose instead we ask for the $k$-dimensional subspace that reconstructs the data
-best. Let $\hat{V}_k=[V_1\cdots V_k]$ have orthonormal columns, so $\hat{V}_k^{\!\top}\hat{V}_k=I_k$.
-The best approximation of $a$ inside that subspace is the orthogonal projection
-$\hat{V}_k\hat{V}_k^{\!\top} a$, and the error is
+This is the route the lecture slides take, and we follow their derivation step for
+step. (The slides write the mean-deducted point as $y_i$; it is the same object we
+are calling $\bar{x}_i$, and we keep $\bar{x}_i$ here so that one symbol serves the
+whole document.)
+
+\paragraph{One direction first.} Take a single unit vector $u$, so $u^{\!\top}u=1$.
+The projection of the mean-deducted point $\bar{x}_i$ onto $u$ is
 \[
-  E \;=\; \frac{1}{N}\sum_{i=1}^N \bigl\| \bar{x}_i - \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i \bigr\|^2 .
+  \hat{\bar{x}}_i \;=\; (u^{\!\top}\bar{x}_i)\,u ,
 \]
-Write $P=\hat{V}_k\hat{V}_k^{\!\top}$. Then $P$ is symmetric and $P^2=\hat{V}_k(\hat{V}_k^{\!\top} \hat{V}_k)\hat{V}_k^{\!\top}=\hat{V}_k\hat{V}_k^{\!\top}=P$,
-i.e.\ $P$ is a projection. Expanding one term,
+a vector pointing along $u$ whose length is the coefficient $u^{\!\top}\bar{x}_i$.
+The \emph{reconstruction error} for that one point is how far the projection lands
+from the point itself. Expand it, keeping every step:
 \[
-  \|a-Pa\|^2 = (a-Pa)^{\!\top}(a-Pa) = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} P^{\!\top} Pa
-             = a^{\!\top} a - 2a^{\!\top} Pa + a^{\!\top} Pa
-             = \|a\|^2 - a^{\!\top} Pa ,
+\begin{aligned}
+  \bigl\|\bar{x}_i - (u^{\!\top}\bar{x}_i)u\bigr\|^2
+  &= \bigl(\bar{x}_i - (u^{\!\top}\bar{x}_i)u\bigr)^{\!\top}\bigl(\bar{x}_i - (u^{\!\top}\bar{x}_i)u\bigr) \\
+  &= \bar{x}_i^{\!\top}\bar{x}_i \;-\; 2(u^{\!\top}\bar{x}_i)(u^{\!\top}\bar{x}_i) \;+\; (u^{\!\top}\bar{x}_i)^2 (u^{\!\top}u) \\
+  &= \bar{x}_i^{\!\top}\bar{x}_i \;-\; (u^{\!\top}\bar{x}_i)^2 ,
+\end{aligned}
 \]
-where we used $P^{\!\top} P = PP = P$. Averaging over $i$,
+where the last line uses $u^{\!\top}u=1$, so the $-2(\cdot)^2$ and $+(\cdot)^2$
+terms collapse to $-(\cdot)^2$.
+
+\paragraph{Summing over the data.} The total reconstruction error is
 \[
-  E = \underbrace{\frac1N\sum_i\|\bar{x}_i\|^2}_{\text{fixed, does not depend on }\hat{V}_k}
-      \;-\; \frac1N\sum_i \bar{x}_i^{\!\top} \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i .
+  \boxed{\;J(u) \;=\; \sum_{i=1}^{N}\bigl\|\bar{x}_i - \hat{\bar{x}}_i\bigr\|^2
+       \;=\; \sum_{i=1}^{N}\|\bar{x}_i\|^2 \;-\; \sum_{i=1}^{N}(u^{\!\top}\bar{x}_i)^2 \;}
 \]
-So minimising $E$ is the same as maximising the second term, and
+The first term does not contain $u$ at all --- it is a property of the data, fixed
+before we choose anything. So
+\begin{center}
+minimising $J(u)$ $\;\Longleftrightarrow\;$ maximising $\sum_i (u^{\!\top}\bar{x}_i)^2$.
+\end{center}
+
+\paragraph{And that is View 1 again.} Exactly as in Section~\ref{sec:view1}, write
+the sum as a quadratic form. Using $(u^{\!\top}\bar{x}_i)^2 = u^{\!\top}\bar{x}_i\bar{x}_i^{\!\top}u$,
 \[
-  \frac1N\sum_i \bar{x}_i^{\!\top} \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i
-  = \frac1N\sum_i \sum_{l=1}^{k} (V_l^{\!\top} \bar{x}_i)^2
-  = \sum_{l=1}^{k} V_l^{\!\top} C V_l ,
+  \sum_{i=1}^{N}(u^{\!\top}\bar{x}_i)^2
+  \;=\; u^{\!\top}\Bigl(\sum_{i=1}^{N}\bar{x}_i\bar{x}_i^{\!\top}\Bigr)u
+  \;=\; u^{\!\top} S\,u ,
+  \qquad S \;:=\; \sum_{i=1}^{N}\bar{x}_i\bar{x}_i^{\!\top} \;=\; XX^{\!\top},
 \]
-which is exactly the total variance captured, i.e.\ View~1 summed over $k$
-directions. \textbf{Minimising reconstruction error and maximising captured
-variance are the same problem.} This is worth remembering, because it is precisely
-the property Fisher's LDA does \emph{not} have: LDA is not trying to reconstruct
-anything.
+the \textbf{scatter matrix}. Since $S = N\,C$, maximising $u^{\!\top}Su$ and
+maximising $u^{\!\top}Cu$ give the same $u$ --- a positive constant cannot move the
+maximiser. So this route lands on the same eigenproblem $Cu=\lambda u$.
+
+\textbf{Minimising reconstruction error and maximising captured variance are the
+same problem.} Worth remembering, because it is precisely the property Fisher's
+LDA does \emph{not} have: LDA is not trying to reconstruct anything, which is why
+there is no analogue of Theorem~\ref{thm:recon} for Fisherfaces.
+
+\paragraph{More than one direction.} One direction is not enough for faces, so we
+ask for the $k$ mutually orthogonal directions that minimise the total
+reconstruction error. Let $\hat{V}_k=[V_1\cdots V_k]$ have orthonormal columns, so
+$\hat{V}_k^{\!\top}\hat{V}_k=I_k$, and let $P=\hat{V}_k\hat{V}_k^{\!\top}$ be the
+projection onto their span. $P$ is symmetric, and
+\[
+  P^2=\hat{V}_k(\hat{V}_k^{\!\top}\hat{V}_k)\hat{V}_k^{\!\top}=\hat{V}_k I_k\hat{V}_k^{\!\top}=P,
+\]
+so $P$ really is a projection. The same expansion as before, now with $P$ in place
+of $uu^{\!\top}$, gives for one point
+\[
+  \|\bar{x}_i-P\bar{x}_i\|^2
+  = \bar{x}_i^{\!\top}\bar{x}_i - 2\,\bar{x}_i^{\!\top} P\bar{x}_i + \bar{x}_i^{\!\top} P^{\!\top}P\bar{x}_i
+  = \|\bar{x}_i\|^2 - \bar{x}_i^{\!\top} P\bar{x}_i ,
+\]
+using $P^{\!\top}P = PP = P$. Summing and dropping the $u$-free term as before, we
+must maximise
+\[
+  \sum_{i} \bar{x}_i^{\!\top}\hat{V}_k\hat{V}_k^{\!\top}\bar{x}_i
+  \;=\; \sum_{i}\sum_{l=1}^{k}(V_l^{\!\top}\bar{x}_i)^2
+  \;=\; \sum_{l=1}^{k} V_l^{\!\top} S\, V_l ,
+\]
+which is just View~1 summed over $k$ directions. The maximum is attained by the
+eigenvectors of $S$ (equivalently of $C$) belonging to the $k$ largest
+eigenvalues; the slides prove this explicitly for $k=2$ and note that larger $k$
+follows identically.
 
 \subsection{View 3: the SVD}
 
@@ -276,9 +324,12 @@ Write the thin SVD $X = V\Sigma Q^{\!\top}$, with $V\in\R^{d\times N}$ and
 $Q\in\R^{N\times N}$ having orthonormal columns and $\Sigma$ diagonal with
 $\sigma_1\ge\sigma_2\ge\cdots\ge 0$. Then
 \[
-  C = \frac1N XX^{\!\top} = \frac1N U\Sigma \hat{V}_k^{\!\top}\hat{V}_k \Sigma U^{\!\top} = V\frac{\Sigma^2}{N}V^{\!\top},
+  C \;=\; \frac1N XX^{\!\top}
+    \;=\; \frac1N \bigl(V\Sigma Q^{\!\top}\bigr)\bigl(V\Sigma Q^{\!\top}\bigr)^{\!\top}
+    \;=\; \frac1N V\Sigma \underbrace{Q^{\!\top}Q}_{=\,I}\,\Sigma^{\!\top} V^{\!\top}
+    \;=\; V\frac{\Sigma^2}{N}V^{\!\top},
 \]
-using $\hat{V}_k^{\!\top}\hat{V}_k=I$. This is already an eigendecomposition of $C$: the left
+using $Q^{\!\top}Q=I$ and $\Sigma$ diagonal, so $\Sigma\Sigma^{\!\top}=\Sigma^2$. This is already an eigendecomposition of $C$: the left
 singular vectors of $X$ \emph{are} the eigenfaces, and
 \[
   \lambda_l = \frac{\sigma_l^2}{N}.
