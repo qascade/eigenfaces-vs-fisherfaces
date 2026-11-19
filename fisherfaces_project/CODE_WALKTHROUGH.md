@@ -399,10 +399,13 @@ silently, with no error, at chance-level accuracy.
 
 ```matlab
 V = X * W;
+scale = norm(V(:, 1));                 % largest column norm = sqrt(lambda_1)
 for l = 1:size(V, 2)
     nrm = norm(V(:, l));
-    if nrm > 1e-10
+    if nrm > 1e-10 * scale
         V(:, l) = V(:, l) / nrm;
+    else
+        V(:, l) = 0;                   % numerically-zero direction: do not use
     end
 end
 ```
