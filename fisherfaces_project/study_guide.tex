@@ -129,9 +129,14 @@ identity of Theorem~\ref{thm:recon} reads exactly as it does in the HW3 solution
 and we flag the difference wherever eigenvalues are quoted numerically.
 
 \medskip
-\noindent\emph{Where the code differs.} The MATLAB script names the centred data
-matrix \texttt{A} rather than $X$, and the eigenface matrix \texttt{U} rather than
-$\hat{V}_k$; the mathematics is identical.
+\noindent\emph{The code uses the same names.} The MATLAB script deliberately
+mirrors this notation: \texttt{xbar} is $\bar{x}$, \texttt{X} is the
+mean-deducted data matrix, \texttt{L} is $X^{\!\top}\!X$, \texttt{W} (inside
+\texttt{doPCA}) holds the eigenvectors $w$ of $L$, \texttt{V} is the eigenface
+matrix and \texttt{Vk}/\texttt{Vm} a truncated eigenspace $\hat{V}_k$, and
+\texttt{Alpha} holds the eigen-coefficients $\alpha_{il}$. Raw (not yet centred)
+image matrices are named \texttt{imgs}, \texttt{imTr}, \texttt{imTe}, since
+$X$ is reserved for the centred data.
 
 \paragraph{Why stacking pixels into a vector is allowed.}
 A $112\times 92$ image has $10304$ numbers in it. Writing them as a $10304$-long
@@ -235,7 +240,7 @@ $\lambda_l$ literally is the variance captured by eigenvector $V_l$.
 \subsection{View 2: minimise the reconstruction error}
 
 Suppose instead we ask for the $k$-dimensional subspace that reconstructs the data
-best. Let $\hat{V}_k=[V_1\cdots \hat{V}_k]$ have orthonormal columns, so $\hat{V}_k^{\!\top} \hat{V}_k=I_k$.
+best. Let $\hat{V}_k=[V_1\cdots V_k]$ have orthonormal columns, so $\hat{V}_k^{\!\top}\hat{V}_k=I_k$.
 The best approximation of $a$ inside that subspace is the orthogonal projection
 $\hat{V}_k\hat{V}_k^{\!\top} a$, and the error is
 \[
@@ -320,11 +325,11 @@ Theorem~\ref{thm:gram} gives eigen\emph{vectors}, not \emph{unit} eigenvectors.
 $\|Xw\| = \sqrt{\lambda}$, which for face data is a huge number, not $1$. Every
 column must be divided by its own norm afterwards. In our code:
 \begin{lstlisting}
-U = A * V;
-for i = 1:size(U, 2)
-    nrm = norm(U(:, i));
+V = X * W;
+for l = 1:size(V, 2)
+    nrm = norm(V(:, l));
     if nrm > 1e-10
-        U(:, i) = U(:, i) / nrm;
+        V(:, l) = V(:, l) / nrm;
     end
 end
 \end{lstlisting}
@@ -381,7 +386,7 @@ the sum of the eigenvalues we threw away.
 The eigenvectors $V_1,\dots,V_N$ of the symmetric matrix $C$ form an orthonormal
 basis of the space spanned by the data, so we may expand each centred image as
 $\bar{x}_i=\sum_{i} \alpha_{il}V_l$ with $\alpha_{il}=V_l^{\!\top} \bar{x}_i$. Because the basis is
-orthonormal, Pythagoras gives $\|\bar{x}_i\|^2=\sum_i \alpha_{il}^2$.
+orthonormal, Pythagoras gives $\|\bar{x}_i\|^2=\sum_l \alpha_{il}^2$.
 
 Keeping only the first $k$ basis vectors, $\hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i = \sum_{i\le k}\alpha_{il}V_l$,
 so the residual is $\bar{x}_i - \hat{V}_k\hat{V}_k^{\!\top} \bar{x}_i = \sum_{l>k}\alpha_{il}V_l$ and, by
@@ -428,7 +433,7 @@ returns eigenvalues in ascending order, so the \emph{first} column is the
 \emph{least} important direction -- the exact opposite of what we want. Hence
 \begin{lstlisting}
 [eigvals, idx] = sort(diag(D), 'descend');
-V = V(:, idx);
+W = W(:, idx);
 \end{lstlisting}
 Forgetting this does not produce an error; it silently gives a recogniser that uses
 the noisiest directions and performs at chance level. \texttt{diag(D)} is needed
@@ -1157,11 +1162,16 @@ The generalised eigenvectors satisfy $w_l^{\!\top}\Sw w_{l'} = 0$ for $\lambda_l
 In general $w_l^{\!\top} w_{l'} \neq 0$.
 \end{theorem}
 \begin{proof}
-The whitened eigenvectors $z_i$ of the symmetric matrix $M$ are orthonormal:
-$z_l^{\!\top} z_{l'}=\delta_{ll'}$. Since $w_i = R^{-1}z_i$, i.e.\ $z_i = Rw_i$,
+The whitened eigenvectors $z_l$ of the symmetric matrix $M$ are orthonormal:
+$z_l^{\!\top} z_{l'}=\delta_{ll'}$. Since $w_l = R^{-1}z_l$, equivalently
+$z_l = Rw_l$, substituting gives
 \[
-  \delta_{ll'} = z_l^{\!\top} z_j = (Rw_i)^{\!\top}(Rw_j) = w_i^{\!\top} R^{\!\top} R w_j = w_l^{\!\top}\Sw w_{l'} .
+  \delta_{ll'} \;=\; z_l^{\!\top} z_{l'}
+  \;=\; (Rw_l)^{\!\top}(Rw_{l'})
+  \;=\; w_l^{\!\top} R^{\!\top} R\, w_{l'}
+  \;=\; w_l^{\!\top}\Sw\, w_{l'} ,
 \]
+using $\Sw = R^{\!\top} R$ in the last step.
 So they are orthonormal with respect to the inner product defined by $\Sw$, not the
 Euclidean one. Euclidean orthogonality would require $R^{\!\top} R=I$, i.e.\ $\Sw=I$,
 which is false in general.
@@ -1759,7 +1769,7 @@ $\St=\Sb+\Sw$                       & S5--S8 & $\le 8.6\times10^{-16}$ relative 
 $\rank(\Sw)\le N-c$                 & S5 & $1482 = 1482$, bound met \\
 no duplicate training images        & S5 & $0$ pairs (after cleaning) \\
 our solver vs \texttt{eig(Sb,Sw,'chol')} & S6--S8 & $\le 7.8\times10^{-16}$ relative \\
-eigenfaces orthonormal              & S12(a) & $\|U^{\!\top} U-I\|_F=9.1\times10^{-14}$ \\
+eigenfaces orthonormal              & S12(a) & $\|V^{\!\top} V-I\|_F=9.1\times10^{-14}$ \\
 \texttt{eig} route vs \texttt{svd} route & S12(b) & $|u^{\!\top} u'|=1.000000$ for top 10 \\
 Fisherfaces $\Sw$-orthogonal        & S12(c) & off-diagonal $3.8\times10^{-13}$ \\
 Fisherfaces \emph{not} Euclidean-orthogonal & S12(c) & off-diagonal $0.499$ \\

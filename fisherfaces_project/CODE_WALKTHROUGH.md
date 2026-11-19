@@ -10,6 +10,35 @@ there*.
 
 ---
 
+## Variable names
+
+The script uses the same symbols as the study guide, which in turn follow the
+course slides ("PCA: algorithm") and HW3 Q1:
+
+| Code | Maths | Meaning |
+|---|---|---|
+| `imgs`, `imTr`, `imTe` | $x_i$ | raw images, one per **column** |
+| `xbar` | $\bar{x}$ | the mean face |
+| `X`, `XO`, `XY`, `Xte` | $X$ | mean-deducted data, $X=[\bar{x}_1|\cdots|\bar{x}_N]$ |
+| `L` | $L$ | the small matrix $X^{\top}X$ |
+| `W` (inside `doPCA`) | $w$ | eigenvectors of $L$, in $\mathbb{R}^N$ |
+| `V`, `VO`, `VY` | $V$ | eigenfaces (eigenvectors of $C$) |
+| `Vk`, `Vm`, `Vcm1` | $\hat{V}_k$ | a truncated eigenspace |
+| `lambda` | $\lambda_l$ | eigenvalues of $C$ |
+| `Alpha` | $\alpha_{il}$ | eigen-coefficients |
+| `Sw`, `Sb`, `St` | $S_W,S_B,S_T$ | scatter matrices |
+| `Wfld`, `Wopt` | $W$ | Fisherfaces |
+
+Note `W` means two different things, exactly as in the guide: inside `doPCA` it is
+an eigenvector matrix of $L$ (in $\mathbb{R}^N$); elsewhere `Wfld`/`Wopt` are
+Fisherfaces (in $\mathbb{R}^d$). They are in different scopes and never meet.
+
+Index letters follow the guide too: `i` over images, `l` over components, `j` over
+classes.
+
+---
+
+
 ## S0 — Configuration
 
 ```matlab
@@ -151,9 +180,9 @@ If these drift, the split logic diverged and nothing downstream is trustworthy.
 **Run this section first whenever anything in the loader changes.**
 
 ```matlab
-rateO(t) = nnClassify(Uk' * AO, ytrO, Uk' * AteO, yteO);
+rateO(t) = nnClassify(Vk' * XO, ytrO, Vk' * XteO, yteO);
 ```
-Note `AteO = XteO - meanO` uses the **training** mean, not the test mean. This is
+Note `XteO = imTeO - xbarO` uses the **training** mean, not the test mean. This is
 important and easy to get wrong: at test time you do not have access to the test
 set's statistics. Using the test mean would be information leakage.
 
@@ -162,21 +191,21 @@ set's statistics. Using the test mean would be information leakage.
 ## S5 — Why `S_W` cannot be inverted
 
 ```matlab
-AwY(:, cols) = XtrY(:, cols) - mi;
+DwY(:, cols) = imTrY(:, cols) - mi;
 ```
 Builds the within-class-centred matrix: each image minus **its own class mean**
 (not the global mean). This is the matrix whose Gram we take.
 
 ```matlab
-GwY = AwY' * AwY;
-rankSwY = rank(GwY);
+LwY = DwY' * DwY;
+rankSwY = rank(LwY);
 ```
-Uses `rank(Aw*Aw') = rank(Aw) = rank(Aw'*Aw)` to get the rank of an
-`8.3 GB` matrix from a `1520×1520` one. **Never** write `Aw*Aw'` here — it would
+Uses `rank(Dw*Dw') = rank(Dw) = rank(Dw'*Dw)` to get the rank of an
+`8.3 GB` matrix from a `1520×1520` one. **Never** write `Dw*Dw'` here — it would
 attempt to allocate 8.3 GB and die.
 
 ```matlab
-if norm(XtrY(:, cols(u)) - XtrY(:, cols(v))) == 0
+if norm(imTrY(:, cols(u)) - imTrY(:, cols(v))) == 0
 ```
 Duplicate search. We added this after measuring `rank = 1481` instead of the
 predicted 1482. It found one byte-identical pair in subject 12, caused by a stray
@@ -188,9 +217,9 @@ identical after centring, hence an exact linear dependency costing one rank.
 correct *because* we are looking for byte-identical duplicates, not near-duplicates.
 
 ```matlab
-clear AwY GwY;
+clear DwY LwY;
 ```
-`AwY` is 392 MB. Without this the memory stays occupied for the rest of the run.
+`DwY` is 392 MB. Without this the memory stays occupied for the rest of the run.
 
 ---
 
@@ -206,7 +235,7 @@ folder paths; wrapping it keeps it as a single element. (`configs{ci,2}{1}` unwr
 it.) **This is a real MATLAB trap** and the error it produces is confusing.
 
 ```matlab
-rCorr = nnClassify(normCols(Xtr), ytr, normCols(Xte), yte);
+rCorr = nnClassify(normCols(imTr), ytr, normCols(imTe), yte);
 ```
 The correlation baseline from the paper. `normCols` makes each image zero-mean and
 unit-norm, which turns Euclidean nearest-neighbour into maximum-correlation
@@ -224,8 +253,8 @@ per-row. The `if k > 3` guard exists because `P(4:3,:)` would be empty and
 `nnClassify` would divide by zero.
 
 ```matlab
-Ucm1 = U(:, 1:(c-1));
-rEigMatched = nnClassify(Ucm1' * A, ytr, Ucm1' * Ate, yte);
+Vcm1 = V(:, 1:(c-1));
+rEigMatched = nnClassify(Vcm1' * X, ytr, Vcm1' * Xte, yte);
 ```
 **The fairness line.** Fisherfaces gets exactly `c-1` features, so we also measure
 Eigenfaces at `c-1`. Quoting Eigenfaces' best-over-all-k against Fisherfaces' fixed
@@ -233,14 +262,14 @@ Eigenfaces at `c-1`. Quoting Eigenfaces' best-over-all-k against Fisherfaces' fi
 
 ```matlab
 m = N - c;
-[Wopt, info] = fisherFromPCA(U, mf, Xtr, ytr, m, 2);
+[Wopt, info] = fisherFromPCA(V, xbar, imTr, ytr, m, 2);
 ```
 `m = N-c` is the paper's choice. The `2` requests full diagnostics, including the
 cross-check against MATLAB's `eig(Sb,Sw,'chol')`. In the sweeps we pass `1` or `0`
 because that cross-check doubles the cost.
 
 ```matlab
-clear U A Ate Xtr Xte Wopt;
+clear V X Xte imTr imTe Wopt;
 ```
 Freed at the end of every configuration. Without it, five Yale-sized
 configurations would accumulate several GB and the script would thrash or die.
@@ -249,7 +278,7 @@ configurations would accumulate several GB and the script would thrash or die.
 
 ## S9 — Sweep of the PCA dimension `m`
 
-The key experiment. `fisherFromPCA` takes a **precomputed** `U` precisely so this
+The key experiment. `fisherFromPCA` takes a **precomputed** `V` precisely so this
 sweep does not recompute the expensive eigendecomposition for every `m` — only the
 scatter matrices and the small eigenproblem are redone.
 
@@ -265,7 +294,7 @@ mandatory — the condition number spans about nine orders of magnitude.
 ## S10 — Sweep of training images per subject
 
 ```matlab
-[Xtr, ytr, Xte, yte] = loadFaces(yaleFolders, nTr, 'random', dYALE);
+[imTr, ytr, imTe, yte] = loadFaces(yaleFolders, nTr, 'random', dYALE);
 ```
 Uses the **random** split, not the HW3 lexicographic one. **Why:** the
 lexicographic split has a severe lighting bias (see the PDF, §13.2). If we used it
@@ -273,7 +302,7 @@ here, the training-size effect and the split bias would be tangled together and 
 curve would be uninterpretable.
 
 ```matlab
-ksHere = ksHere(ksHere <= size(U, 2));
+ksHere = ksHere(ksHere <= size(V, 2));
 ```
 At `n = 2` we have only `N = 76` images, hence at most 76 eigenfaces. Asking for
 `k = 170` would index out of bounds. This line clips the list to what exists.
@@ -289,7 +318,7 @@ Required under `matlab -batch`: there is no display, and a visible figure would
 either error or hang.
 
 ```matlab
-imagesc(reshape(keepORL.U(:, i), orlH, orlW));
+imagesc(reshape(keepORL.V(:, i), orlH, orlW));
 colormap gray; axis image off;
 ```
 - `reshape(..., 112, 92)` — the inverse of `im(:)`. Height first, then width. Swap
@@ -303,13 +332,13 @@ colormap gray; axis image off;
 ## S12 — Numerical checks
 
 ```matlab
-norm(U20' * U20 - eye(20), 'fro')
+norm(V20' * V20 - eye(20), 'fro')
 ```
 (a) Orthonormality. Measured `9.06e-14`. If the normalisation loop in `doPCA` were
 removed, this would be enormous.
 
 ```matlab
-agree(i) = abs(Usvd(:, i)' * keepORL.U(:, i));
+agree(i) = abs(Vsvd(:, i)' * keepORL.V(:, i));
 ```
 (b) `eig(A'A)` vs `svd(A)`. **`abs` is essential** — eigenvector signs are
 arbitrary, so a correct implementation can return `-u`. Comparing `norm(u1-u2)`
@@ -352,7 +381,7 @@ Numeric sort for ORL. Safe only because ORL filenames *start* with a digit;
 used for Yale.
 
 ```matlab
-Xtr(:, a) = im(:);
+imTr(:, a) = im(:);
 ```
 One image per **column**. The whole script depends on this orientation; the
 d×N-vs-N×d choice propagates into every matrix product and every `mean(X,2)`.
@@ -360,8 +389,8 @@ d×N-vs-N×d choice propagates into every matrix product and every `mean(X,2)`.
 ### `doPCA`
 
 ```matlab
-L = A' * A;
-[V, D] = eig(L);
+L = X' * X;
+[W, D] = eig(L);
 [eigvals, idx] = sort(diag(D), 'descend');
 ```
 The Gram trick plus the mandatory descending sort. `eig` returns **ascending**
@@ -369,23 +398,23 @@ order, so without the sort we would keep the *least* informative directions —
 silently, with no error, at chance-level accuracy.
 
 ```matlab
-U = A * V;
-for i = 1:size(U, 2)
-    nrm = norm(U(:, i));
+V = X * W;
+for l = 1:size(V, 2)
+    nrm = norm(V(:, l));
     if nrm > 1e-10
-        U(:, i) = U(:, i) / nrm;
+        V(:, l) = V(:, l) / nrm;
     end
 end
 ```
-`A*v` has norm `sqrt(λ)`, not 1. The `if` guard matters: after mean subtraction
+`X*w` has norm `sqrt(λ)`, not 1. The `if` guard matters: after mean subtraction
 `rank(A) ≤ N-1`, so the last eigenvalue is ~0 and its column is pure round-off.
 Dividing that by its own tiny norm would amplify noise into a full-amplitude
 garbage image.
 
 ```matlab
-lambda = eigvals / M;
+lambda = eigvals / N;
 ```
-Eigenvalues of `L = A'A` are `M×` those of `C = AA'/M`. **Without this line the
+Eigenvalues of `L = X'X` are `N×` those of `C = XX'/N`. **Without this line the
 recognition rates are unchanged but the reconstruction-error identity is wrong by a
 factor of 192** — which is exactly what makes it a dangerous bug.
 
@@ -416,17 +445,18 @@ correlation.
 ### `fisherFromPCA`
 
 ```matlab
-Um = U(:, 1:m);
-Y  = Um' * A;
+Vm    = V(:, 1:m);
+X     = imgs - xbar;
+Alpha = Vm' * X;
 ```
-Stage 1: project to `m` dimensions. Takes `U` as an **argument** so the m-sweep
+Stage 1: project to `m` dimensions. Takes `V` as an **argument** so the m-sweep
 does not recompute PCA each time.
 
 ```matlab
-Sw = Sw + Di * Di';
-Sb = Sb + ni * (mi - muY) * (mi - muY)';
+Sw = Sw + Dj * Dj';
+Sb = Sb + nj * (muj - alphaBar) * (muj - alphaBar)';
 ```
-The definitions, accumulated class by class. Note `Sb` is weighted by `ni` —
+The definitions, accumulated class by class. Note `Sb` is weighted by `nj` —
 dropping that weight gives *unweighted* LDA, a different (and for unequal class
 sizes, wrong) method.
 
@@ -468,7 +498,7 @@ Maps back: `w = inv(R)*z`. Truncated to `c-1` because `rank(S_B) ≤ c-1`, so th
 remaining eigenvalues are zero and their eigenvectors are arbitrary noise.
 
 ```matlab
-Wopt = Um * Wfld;
+Wopt = Vm * Wfld;
 ```
 Composes both stages into one `d × (c-1)` projection.
 

@@ -151,7 +151,7 @@
   figures written to figs/
 
 --- S12: numerical checks ---
-  (a) ||U'U - I||_F for 20 ORL eigenfaces = 9.060e-14
+  (a) ||V'V - I||_F for 20 ORL eigenfaces = 9.060e-14
   (b) |u_svd . u_eig| for the first 10 components:
       1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 1.000000 
       min over those 10 = 1.00000000 (1.0 means identical direction)
