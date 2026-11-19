@@ -212,6 +212,26 @@
    => low rank (big lambda) is smooth, high rank (small lambda) is fine
       detail, so inverting S_W pushes energy into the fine directions.
 
+--- S15: ways of solving S_B w = lambda S_W w ---
+
+  == ORL-32  ==  m = 160, cond(S_W) = 7.849e+07
+    route                              rate%      sec    max|imag|  angle vs #3
+    1 inv(Sw)*Sb, then eig              90.6     0.01     9.34e-10      0.00 deg
+    2 Sw\Sb, then eig                   90.6     0.01     1.27e-09      0.00 deg
+    3 Cholesky whitening  <-- ours      90.6     0.00     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            90.6     0.01     0.00e+00      0.00 deg
+    5 eig(Sb,Sw)  [QZ]                  90.6     0.00     0.00e+00      0.00 deg
+    6 eig(Sb,Sw,'chol')                 90.6     0.00     0.00e+00      0.00 deg
+
+  == Yale-38 ==  m = 1482, cond(S_W) = 4.187e+11
+    route                              rate%      sec    max|imag|  angle vs #3
+    1 inv(Sw)*Sb, then eig              95.5     1.01     8.43e-09      0.00 deg
+    2 Sw\Sb, then eig                   95.5     0.75     8.30e-09      0.00 deg
+    3 Cholesky whitening  <-- ours      95.5     0.45     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            95.5     1.09     0.00e+00      0.00 deg
+    5 eig(Sb,Sw)  [QZ]                  95.5     0.44     0.00e+00      0.00 deg
+    6 eig(Sb,Sw,'chol')                 95.5     0.38     0.00e+00      0.00 deg
+
 =====================================================
   DONE
 =====================================================
