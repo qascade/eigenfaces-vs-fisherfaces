@@ -119,8 +119,8 @@ wLDA = SwToy \ (m2 - m1);
 wLDA = wLDA / norm(wLDA);
 
 % ---- PCA direction: top eigenvector of the TOTAL covariance ----
-Atoy  = Xtoy - mAll;
-Ctoy  = (Atoy * Atoy') / size(Xtoy, 2);
+Xtoy_c  = Xtoy - mAll;
+Ctoy  = (Xtoy_c * Xtoy_c') / size(Xtoy, 2);
 [Vt, Dt] = eig(Ctoy);
 [~, it]  = sort(diag(Dt), 'descend');
 wPCA = Vt(:, it(1));
@@ -234,7 +234,7 @@ saveas(gcf, [figDir 's1_toy.png']);
 %
 %  ORL  : subjects live in  ../ORL/s1 ... ../ORL/s40, 10 images each.
 %         NOTE: the ORL directory also contains a stray empty folder called
-%         'sed'.  A glob like dir('../ORL/s*') would pick it up and break the
+%         'sed'.  X glob like dir('../ORL/s*') would pick it up and break the
 %         loader.  We avoid the problem completely by BUILDING the path from
 %         the subject index, exactly as the HW3 code did.
 %
@@ -284,36 +284,36 @@ fprintf('\n--- S3/S4: eigenfaces baseline (HW3 regression check) ---\n');
 ks_d = [1 2 3 5 10 15 20 30 50 75 100 150 170];
 
 % ---------- ORL, 32 subjects, 6 train / 4 test, HW3 file order ----------
-[XtrO, ytrO, XteO, yteO] = loadFaces(orlFolders32, 6, 'hw3', dORL);
-fprintf('  ORL-32 train %d x %d, test %d x %d\n', size(XtrO), size(XteO));
+[imTrO, ytrO, imTeO, yteO] = loadFaces(orlFolders32, 6, 'hw3', dORL);
+fprintf('  ORL-32 train %d x %d, test %d x %d\n', size(imTrO), size(imTeO));
 
-[UO, lambdaO, meanO] = doPCA(XtrO);
-AO   = XtrO - meanO;
-AteO = XteO - meanO;
+[VO, lambdaO, xbarO] = doPCA(imTrO);
+XO   = imTrO - xbarO;
+XteO = imTeO - xbarO;
 
 rateO = zeros(size(ks_d));
 for t = 1:numel(ks_d)
     k = ks_d(t);
-    Uk = UO(:, 1:k);
-    rateO(t) = nnClassify(Uk' * AO, ytrO, Uk' * AteO, yteO);
+    Vk = VO(:, 1:k);
+    rateO(t) = nnClassify(Vk' * XO, ytrO, Vk' * XteO, yteO);
 end
 fprintf('  ORL-32 eigenfaces : ');
 fprintf('%.1f ', rateO);
 fprintf('\n');
 
 % ---------- Yale, 38 subjects, 40 train, HW3 file order ----------
-[XtrY, ytrY, XteY, yteY] = loadFaces(yaleFolders, 40, 'hw3', dYALE);
-fprintf('  Yale   train %d x %d, test %d x %d\n', size(XtrY), size(XteY));
+[imTrY, ytrY, imTeY, yteY] = loadFaces(yaleFolders, 40, 'hw3', dYALE);
+fprintf('  Yale   train %d x %d, test %d x %d\n', size(imTrY), size(imTeY));
 
-[UY, lambdaY, meanY] = doPCA(XtrY);
-AY   = XtrY - meanY;
-AteY = XteY - meanY;
+[VY, lambdaY, xbarY] = doPCA(imTrY);
+XY   = imTrY - xbarY;
+XteY = imTeY - xbarY;
 
 rateY = zeros(size(ks_d));
 for t = 1:numel(ks_d)
     k = ks_d(t);
-    Uk = UY(:, 1:k);
-    rateY(t) = nnClassify(Uk' * AY, ytrY, Uk' * AteY, yteY);
+    Vk = VY(:, 1:k);
+    rateY(t) = nnClassify(Vk' * XY, ytrY, Vk' * XteY, yteY);
 end
 fprintf('  Yale   eigenfaces : ');
 fprintf('%.1f ', rateY);
@@ -322,14 +322,14 @@ fprintf('\n');
 % ---------- the reconstruction-error identity ----------
 % THEOREM: the mean squared reconstruction error when we keep k components
 % equals the sum of the DISCARDED eigenvalues of the covariance matrix.
-% Here lambda already contains eigenvalues of C = A*A'/M (doPCA divides the
-% eigenvalues of L = A'*A by M), which is why the two columns agree.
+% Here lambda already contains eigenvalues of C = X*X'/M (doPCA divides the
+% eigenvalues of L = X'*X by M), which is why the two columns agree.
 fprintf('\n  Reconstruction error identity (ORL-32):\n');
 fprintf('      k    measured error     sum of discarded eigenvalues\n');
 for k = [10 50 100]
-    Uk   = UO(:, 1:k);
-    Xrec = meanO + Uk * (Uk' * AO);
-    errM = mean(sum((Xrec - XtrO).^2, 1));
+    Vk   = VO(:, 1:k);
+    Xrec = xbarO + Vk * (Vk' * XO);
+    errM = mean(sum((Xrec - imTrO).^2, 1));
     errT = sum(lambdaO(k+1:end));
     fprintf('    %4d  %16.4f  %16.4f\n', k, errM, errT);
 end
@@ -352,20 +352,20 @@ end
 
 fprintf('\n--- S5: why S_W cannot be inverted in pixel space ---\n');
 
-NY = size(XtrY, 2);
+NY = size(imTrY, 2);
 cY = numel(yaleFolders);
 
 % Build the within-class-centred data matrix: subtract each class mean from
 % the images of that class.
-AwY = zeros(size(XtrY));
+DwY = zeros(size(imTrY));
 for i = 1:cY
     cols = find(ytrY == i);
-    mi   = mean(XtrY(:, cols), 2);
-    AwY(:, cols) = XtrY(:, cols) - mi;
+    mi   = mean(imTrY(:, cols), 2);
+    DwY(:, cols) = imTrY(:, cols) - mi;
 end
 
-GwY = AwY' * AwY;                 % N x N Gram matrix, cheap
-rankSwY = rank(GwY);              % rank(S_W) = rank(Aw) = rank(Aw'*Aw)
+LwY = DwY' * DwY;                 % N x N Gram matrix, cheap
+rankSwY = rank(LwY);              % rank(S_W) = rank(Aw) = rank(Aw'*Aw)
 
 fprintf('  Yale: d = %d, N = %d, c = %d\n', dYALE, NY, cY);
 fprintf('  S_W in pixel space would be %d x %d = %.2f GB\n', ...
@@ -387,7 +387,7 @@ for i = 1:cY
     cols = find(ytrY == i);
     for u = 1:numel(cols)
         for v = (u+1):numel(cols)
-            if norm(XtrY(:, cols(u)) - XtrY(:, cols(v))) == 0
+            if norm(imTrY(:, cols(u)) - imTrY(:, cols(v))) == 0
                 fprintf('    duplicate: subject %d, training images %d and %d\n', i, u, v);
                 nDup = nDup + 1;
             end
@@ -398,7 +398,7 @@ fprintf('  exact duplicate pairs found = %d\n', nDup);
 fprintf('  this accounts for the gap: %d (bound) - %d (duplicates) = %d (measured)\n', ...
         NY - cY, nDup, rankSwY);
 
-clear AwY GwY;                    % free the memory again
+clear DwY LwY;                    % free the memory again
 
 %% ====================================================================
 %% S6 / S7 / S8  MAIN COMPARISON
@@ -445,31 +445,31 @@ for ci = 1:nCfg
 
     fprintf('\n  == %s ==\n', name);
 
-    [Xtr, ytr, Xte, yte] = loadFaces(folders, numTrain, splitMode, dPix);
-    N = size(Xtr, 2);
+    [imTr, ytr, imTe, yte] = loadFaces(folders, numTrain, splitMode, dPix);
+    N = size(imTr, 2);
     c = numel(folders);
-    fprintf('     N = %d, c = %d, d = %d, test = %d\n', N, c, dPix, size(Xte, 2));
+    fprintf('     N = %d, c = %d, d = %d, test = %d\n', N, c, dPix, size(imTe, 2));
 
     % ---- 1. correlation baseline (raw pixels) ----
-    rCorr = nnClassify(normCols(Xtr), ytr, normCols(Xte), yte);
+    rCorr = nnClassify(normCols(imTr), ytr, normCols(imTe), yte);
 
     % ---- PCA once, reused by methods 2, 3 and 4 ----
-    [U, lam, mf] = doPCA(Xtr);
-    A   = Xtr - mf;
-    Ate = Xte - mf;
+    [V, lam, xbar] = doPCA(imTr);
+    X   = imTr - xbar;
+    Xte = imTe - xbar;
 
     % ---- 2 and 3. eigenfaces, with and without the first 3 components ----
     rEig  = zeros(1, numel(ksAll));
     rEig3 = nan(1, numel(ksAll));
     for t = 1:numel(ksAll)
         k = ksAll(t);
-        if k > size(U, 2)
+        if k > size(V, 2)
             rEig(t) = NaN;
             continue;
         end
-        Uk = U(:, 1:k);
-        P  = Uk' * A;
-        Q  = Uk' * Ate;
+        Vk = V(:, 1:k);
+        P  = Vk' * X;
+        Q  = Vk' * Xte;
         rEig(t) = nnClassify(P, ytr, Q, yte);
         if k > 3
             % keep rows 4..k, i.e. throw away the top 3 eigencoefficients
@@ -478,13 +478,13 @@ for ci = 1:nCfg
     end
 
     % eigenfaces at the SAME number of features Fisherfaces gets
-    Ucm1 = U(:, 1:(c-1));
-    rEigMatched = nnClassify(Ucm1' * A, ytr, Ucm1' * Ate, yte);
+    Vcm1 = V(:, 1:(c-1));
+    rEigMatched = nnClassify(Vcm1' * X, ytr, Vcm1' * Xte, yte);
 
     % ---- 4. fisherfaces ----
     m = N - c;                                  % the paper's choice
-    [Wopt, info] = fisherFromPCA(U, mf, Xtr, ytr, m, 2);
-    rFish = nnClassify(Wopt' * A, ytr, Wopt' * Ate, yte);
+    [Wopt, info] = fisherFromPCA(V, xbar, imTr, ytr, m, 2);
+    rFish = nnClassify(Wopt' * X, ytr, Wopt' * Xte, yte);
 
     [bEig, iEig] = max(rEig);
     bEig3 = max(rEig3);
@@ -504,19 +504,19 @@ for ci = 1:nCfg
 
     % keep the ORL-32 and Yale HW3-split pieces for the later sections
     % Keep only what the later sections actually need.  Holding the full
-    % Yale matrices (X is 392 MB, U is another 392 MB) would waste over a
+    % Yale matrices (X is 392 MB, V is another 392 MB) would waste over a
     % gigabyte for no reason, so we store a few sample images and the first
     % 60 basis vectors rather than everything.
     if ci == 1
-        keepORL = struct('U', U, 'mf', mf, 'Xtr', Xtr, 'ytr', ytr, ...
-                         'Xte', Xte, 'yte', yte, 'Wopt', Wopt, 'lam', lam, ...
+        keepORL = struct('V', V, 'xbar', xbar, 'imTr', imTr, 'ytr', ytr, ...
+                         'imTe', imTe, 'yte', yte, 'Wopt', Wopt, 'lam', lam, ...
                          'rEig', rEig, 'rEig3', rEig3, 'c', c, 'N', N);
     elseif ci == 4
-        keepYale = struct('U', U(:, 1:60), 'mf', mf, 'sample', Xtr(:, 1), ...
+        keepYale = struct('V', V(:, 1:60), 'xbar', xbar, 'sample', imTr(:, 1), ...
                           'Wopt', Wopt, 'lam', lam, ...
                           'rEig', rEig, 'rEig3', rEig3, 'c', c, 'N', N);
     end
-    clear U A Ate Xtr Xte Wopt;
+    clear V X Xte imTr imTe Wopt;
 end
 
 % ---- summary table ----
@@ -559,12 +559,12 @@ for si = 1:size(sweepCfgs, 1)
     dPix    = sweepCfgs{si, 5};
     mList   = sweepCfgs{si, 6};
 
-    [Xtr, ytr, Xte, yte] = loadFaces(folders, nTr, sMode, dPix);
-    N = size(Xtr, 2);
+    [imTr, ytr, imTe, yte] = loadFaces(folders, nTr, sMode, dPix);
+    N = size(imTr, 2);
     c = numel(folders);
-    [U, ~, mf] = doPCA(Xtr);
-    A   = Xtr - mf;
-    Ate = Xte - mf;
+    [V, ~, xbar] = doPCA(imTr);
+    X   = imTr - xbar;
+    Xte = imTe - xbar;
 
     fprintf('\n  == %s ==  (N = %d, c = %d, N-c = %d)\n', nameS, N, c, N - c);
     fprintf('      m      rate%%     rank(S_W)   cond(S_W)    ridge?\n');
@@ -574,8 +574,8 @@ for si = 1:size(sweepCfgs, 1)
     regM  = zeros(size(mList));
     for t = 1:numel(mList)
         m = mList(t);
-        [W, inf1] = fisherFromPCA(U, mf, Xtr, ytr, m, 1);
-        rateM(t) = nnClassify(W' * A, ytr, W' * Ate, yte);
+        [W, inf1] = fisherFromPCA(V, xbar, imTr, ytr, m, 1);
+        rateM(t) = nnClassify(W' * X, ytr, W' * Xte, yte);
         condM(t) = inf1.condSw;
         regM(t)  = inf1.usedReg;
         fprintf('   %5d   %7.1f   %9d   %.3e      %d\n', ...
@@ -589,7 +589,7 @@ for si = 1:size(sweepCfgs, 1)
     mSweepStore{si} = struct('name', nameS, 'mList', mList, 'rate', rateM, ...
                              'cond', condM, 'Nmc', N - c);
 
-    clear U A Ate Xtr Xte;
+    clear V X Xte imTr imTe;
 end
 
 % ---- figure ----
@@ -633,23 +633,23 @@ rateCorrN = zeros(size(nList));
 fprintf('   n/subj     N    N-c   corr%%   eig(best)%%   fisher%%\n');
 for t = 1:numel(nList)
     nTr = nList(t);
-    [Xtr, ytr, Xte, yte] = loadFaces(yaleFolders, nTr, 'random', dYALE);
-    N = size(Xtr, 2);
+    [imTr, ytr, imTe, yte] = loadFaces(yaleFolders, nTr, 'random', dYALE);
+    N = size(imTr, 2);
     c = numel(yaleFolders);
 
-    rateCorrN(t) = nnClassify(normCols(Xtr), ytr, normCols(Xte), yte);
+    rateCorrN(t) = nnClassify(normCols(imTr), ytr, normCols(imTe), yte);
 
-    [U, ~, mf] = doPCA(Xtr);
-    A   = Xtr - mf;
-    Ate = Xte - mf;
+    [V, ~, xbar] = doPCA(imTr);
+    X   = imTr - xbar;
+    Xte = imTe - xbar;
 
     % eigenfaces: best over a few k that are valid for this N
     ksHere = [10 20 30 50 75 100 150 170];
-    ksHere = ksHere(ksHere <= size(U, 2));
+    ksHere = ksHere(ksHere <= size(V, 2));
     bestE = 0;
     for kk = ksHere
-        Uk = U(:, 1:kk);
-        r  = nnClassify(Uk' * A, ytr, Uk' * Ate, yte);
+        Vk = V(:, 1:kk);
+        r  = nnClassify(Vk' * X, ytr, Vk' * Xte, yte);
         if r > bestE
             bestE = r;
         end
@@ -657,13 +657,13 @@ for t = 1:numel(nList)
     rateEigN(t) = bestE;
 
     m = N - c;
-    W = fisherFromPCA(U, mf, Xtr, ytr, m, 0);
-    rateFishN(t) = nnClassify(W' * A, ytr, W' * Ate, yte);
+    W = fisherFromPCA(V, xbar, imTr, ytr, m, 0);
+    rateFishN(t) = nnClassify(W' * X, ytr, W' * Xte, yte);
 
     fprintf('   %5d  %5d  %5d  %6.1f  %10.1f  %8.1f\n', ...
             nTr, N, N - c, rateCorrN(t), rateEigN(t), rateFishN(t));
 
-    clear U A Ate Xtr Xte;
+    clear V X Xte imTr imTe;
 end
 
 figure('Visible', 'off');
@@ -692,7 +692,7 @@ fprintf('\n--- S11: figures ---\n');
 
 % ---------- ORL: mean face ----------
 figure('Visible', 'off');
-imagesc(reshape(keepORL.mf, orlH, orlW));
+imagesc(reshape(keepORL.xbar, orlH, orlW));
 colormap gray; axis image off;
 title('ORL mean face');
 saveas(gcf, [figDir 's11_orl_meanface.png']);
@@ -701,7 +701,7 @@ saveas(gcf, [figDir 's11_orl_meanface.png']);
 figure('Visible', 'off', 'Position', [100 100 700 760]);
 for i = 1:25
     subplot(5, 5, i);
-    imagesc(reshape(keepORL.U(:, i), orlH, orlW));
+    imagesc(reshape(keepORL.V(:, i), orlH, orlW));
     colormap gray; axis image off;
     title(['u_{' num2str(i) '}'], 'FontSize', 8);
 end
@@ -720,14 +720,14 @@ sgtitle('ORL: first 25 fisherfaces');
 saveas(gcf, [figDir 's11_orl_fisherfaces.png']);
 
 % ---------- ORL: reconstruction as k grows ----------
-x   = keepORL.Xtr(:, 1);
+x   = keepORL.imTr(:, 1);
 ksR = [2 10 20 50 75 100 125 150 175];
 figure('Visible', 'off', 'Position', [100 100 1000 450]);
 subplot(2, 5, 1);
 imagesc(reshape(x, orlH, orlW)); colormap gray; axis image off; title('original');
 for t = 1:numel(ksR)
-    Uk   = keepORL.U(:, 1:ksR(t));
-    xRec = keepORL.mf + Uk * (Uk' * (x - keepORL.mf));
+    Vk   = keepORL.V(:, 1:ksR(t));
+    xRec = keepORL.xbar + Vk * (Vk' * (x - keepORL.xbar));
     subplot(2, 5, t + 1);
     imagesc(reshape(xRec, orlH, orlW)); colormap gray; axis image off;
     title(['k = ' num2str(ksR(t))]);
@@ -742,7 +742,7 @@ saveas(gcf, [figDir 's11_orl_reconstruction.png']);
 figure('Visible', 'off', 'Position', [100 100 1200 400]);
 for i = 1:8
     subplot(2, 8, i);
-    imagesc(reshape(keepYale.U(:, i), yalH, yalW));
+    imagesc(reshape(keepYale.V(:, i), yalH, yalW));
     colormap gray; axis image off;
     title(['u_{' num2str(i) '}'], 'FontSize', 8);
 end
@@ -781,7 +781,7 @@ fprintf('  figures written to %s\n', figDir);
 %
 %  Four independent things are verified here:
 %   (a) the eigenfaces really are orthonormal;
-%   (b) the L = A'*A route agrees with a direct SVD of A;
+%   (b) the L = X'*X route agrees with a direct SVD of X;
 %   (c) Fisherfaces are S_W-orthogonal but NOT Euclidean-orthogonal;
 %   (d) the number of useful Fisherfaces is capped at c-1 because
 %       rank(S_B) <= c-1.
@@ -790,19 +790,19 @@ fprintf('  figures written to %s\n', figDir);
 fprintf('\n--- S12: numerical checks ---\n');
 
 % ---- (a) orthonormality of the eigenfaces ----
-U20 = keepORL.U(:, 1:20);
-fprintf('  (a) ||U''U - I||_F for 20 ORL eigenfaces = %.3e\n', ...
-        norm(U20' * U20 - eye(20), 'fro'));
+V20 = keepORL.V(:, 1:20);
+fprintf('  (a) ||V''V - I||_F for 20 ORL eigenfaces = %.3e\n', ...
+        norm(V20' * V20 - eye(20), 'fro'));
 
-% ---- (b) eig(A''A) route vs direct svd(A) ----
-% The two give the same subspace, but svd works on A directly while the Gram
-% matrix A'*A squares the condition number, so svd is the better-conditioned
+% ---- (b) eig(X''X) route vs direct svd(X) ----
+% The two give the same subspace, but svd works on X directly while the Gram
+% matrix X'*X squares the condition number, so svd is the better-conditioned
 % route.  Eigenvector SIGN is arbitrary, so we compare |u1'*u2|, not u1-u2.
-Aorl = keepORL.Xtr - keepORL.mf;
-[Usvd, ~, ~] = svd(Aorl, 'econ');
+Aorl = keepORL.imTr - keepORL.xbar;
+[Vsvd, ~, ~] = svd(Aorl, 'econ');
 agree = zeros(1, 10);
 for i = 1:10
-    agree(i) = abs(Usvd(:, i)' * keepORL.U(:, i));
+    agree(i) = abs(Vsvd(:, i)' * keepORL.V(:, i));
 end
 fprintf('  (b) |u_svd . u_eig| for the first 10 components:\n      ');
 fprintf('%.6f ', agree);
@@ -812,20 +812,20 @@ fprintf('      min over those 10 = %.8f (1.0 means identical direction)\n', min(
 % ---- (c) Fisherfaces are S_W-orthogonal, not Euclidean-orthogonal ----
 % Rebuild the ORL scatter matrices in the PCA space to make the point.
 mORL = keepORL.N - keepORL.c;
-Um   = keepORL.U(:, 1:mORL);
-Y    = Um' * Aorl;
-muY  = mean(Y, 2);
+Vm   = keepORL.V(:, 1:mORL);
+Alpha    = Vm' * Aorl;
+alphaBar  = mean(Alpha, 2);
 SwO  = zeros(mORL, mORL);
 for i = 1:keepORL.c
-    Yi = Y(:, keepORL.ytr == i);
-    mi = mean(Yi, 2);
-    Di = Yi - mi;
+    AlphaJ = Alpha(:, keepORL.ytr == i);
+    mi = mean(AlphaJ, 2);
+    Di = AlphaJ - mi;
     SwO = SwO + Di * Di';
 end
 SwO = (SwO + SwO') / 2;
 
 Wf  = keepORL.Wopt;
-WfY = Um' * Wf;                       % the same directions, expressed in PCA space
+WfY = Vm' * Wf;                       % the same directions, expressed in PCA space
 G_eu = Wf' * Wf;                      % Euclidean Gram matrix
 G_sw = WfY' * SwO * WfY;              % S_W-weighted Gram matrix
 
@@ -838,10 +838,10 @@ fprintf('      => Fisherfaces are S_W-orthogonal, NOT Euclidean-orthogonal\n');
 % ---- (d) the c-1 ceiling ----
 SbO = zeros(mORL, mORL);
 for i = 1:keepORL.c
-    Yi = Y(:, keepORL.ytr == i);
-    ni = size(Yi, 2);
-    mi = mean(Yi, 2);
-    SbO = SbO + ni * (mi - muY) * (mi - muY)';
+    AlphaJ = Alpha(:, keepORL.ytr == i);
+    ni = size(AlphaJ, 2);
+    mi = mean(AlphaJ, 2);
+    SbO = SbO + ni * (mi - alphaBar) * (mi - alphaBar)';
 end
 SbO = (SbO + SbO') / 2;
 fprintf('  (d) ORL-32: c = %d, so theory says rank(S_B) <= %d\n', keepORL.c, keepORL.c - 1);
@@ -858,7 +858,7 @@ fprintf('=====================================================\n');
 %  executable code, which is why they are all collected down here.
 %% ====================================================================
 
-function [Xtr, ytr, Xte, yte] = loadFaces(folders, numTrain, splitMode, d)
+function [imTr, ytr, imTe, yte] = loadFaces(folders, numTrain, splitMode, d)
 % LOADFACES  Read PGM images, vectorise them, split into train and test.
 %
 %   folders   cell array of directory paths, one per subject (= per class)
@@ -868,7 +868,7 @@ function [Xtr, ytr, Xte, yte] = loadFaces(folders, numTrain, splitMode, d)
 %             'random'  shuffle
 %   d         number of pixels per image
 %
-%   Xtr is d x Ntrain: ONE IMAGE PER COLUMN.  ytr holds the class label.
+%   imTr is d x Ntrain: ONE IMAGE PER COLUMN.  ytr holds the class label.
 
 nF = numel(folders);
 
@@ -887,9 +887,9 @@ for p = 1:nF
     nTestTot  = nTestTot  + (nf - ntr);
 end
 
-Xtr = zeros(d, nTrainTot);
+imTr = zeros(d, nTrainTot);
 ytr = zeros(1, nTrainTot);
-Xte = zeros(d, nTestTot);
+imTe = zeros(d, nTestTot);
 yte = zeros(1, nTestTot);
 
 % ---- pass 2: actually read the images ----
@@ -916,11 +916,11 @@ for p = 1:nF
         im = double(imread([folders{p} files(order(j)).name]));
         if j <= numTrain
             a = a + 1;
-            Xtr(:, a) = im(:);             % im(:) stacks the image COLUMN BY COLUMN
+            imTr(:, a) = im(:);             % im(:) stacks the image COLUMN BY COLUMN
             ytr(a)    = p;
         else
             b = b + 1;
-            Xte(:, b) = im(:);
+            imTe(:, b) = im(:);
             yte(b)    = p;
         end
     end
@@ -928,47 +928,55 @@ end
 end
 
 
-function [U, lambda, meanFace] = doPCA(X)
-% DOPCA  Principal components of d x M data X (one image per column),
-%        computed with the small-matrix trick L = A'*A.
+function [V, lambda, xbar] = doPCA(imgs)
+% DOPCA  Principal components of the d x N image matrix imgs (one RAW image
+%        per column), computed with the small-matrix trick L = X'*X.
 %
-%   U        d x M, unit-norm eigenfaces, most important first
-%   lambda   eigenvalues of the covariance C = A*A'/M, descending
-%   meanFace d x 1 mean image
+%  Notation follows the course slides ("PCA: algorithm") and HW3 Q1:
+%     xbar   d x 1   the mean face,  xbar = (1/N) sum_i x_i
+%     X      d x N   the mean-deducted data, X = [xbar_1 | ... | xbar_N]
+%     L      N x N   the small matrix X'*X
+%     W      N x N   eigenvectors of L  (these are sir's w, in R^N)
+%     V      d x N   eigenvectors of C  (the eigenfaces), unit norm,
+%                    most important first
+%     lambda         eigenvalues of C = X*X'/N, descending
 %
-%  WHY THE TRICK: the covariance C = A*A'/M is d x d.  For Yale d = 32256,
-%  so C has 1.04e9 entries (about 8 GB) -- we cannot even store it.  But A
-%  has only M columns, so L = A'*A is only M x M.  If L*v = lam*v then
-%      A*A'*(A*v) = A*(A'*A*v) = A*(lam*v) = lam*(A*v),
-%  so A*v is an eigenvector of A*A' with the SAME eigenvalue.
+%  WHY THE TRICK: the covariance C = X*X'/N is d x d.  For Yale d = 32256,
+%  so C has 1.04e9 entries (about 8 GB) -- we cannot even store it.  But X
+%  has only N columns, so L = X'*X is only N x N.  If L*w = lam*w then
+%      X*X'*(X*w) = X*(X'*X*w) = X*(lam*w) = lam*(X*w),
+%  so X*w is an eigenvector of X*X' with the SAME eigenvalue.
 
-[~, M] = size(X);
+[~, N] = size(imgs);
 
-meanFace = mean(X, 2);
-A = X - meanFace;                % implicit expansion: subtracts from every column
-L = A' * A;                      % M x M, cheap
+xbar = mean(imgs, 2);
+X    = imgs - xbar;              % implicit expansion: subtracts from every column
+L    = X' * X;                   % N x N, cheap
 
-[V, D] = eig(L);
+% W holds the eigenvectors of the SMALL matrix L; these are sir's w, living
+% in R^N.  Not to be confused with the Fisherfaces (also W) elsewhere in this
+% file, which live in R^d -- the two never meet, and this W is local to doPCA.
+[W, D] = eig(L);
 
 % eig returns eigenvalues in ASCENDING order.  We want the largest variance
 % directions first, so we must sort descending -- this is not optional.
 [eigvals, idx] = sort(diag(D), 'descend');
-V = V(:, idx);
+W = W(:, idx);
 
-U = A * V;                       % map back to d-dimensional image space
+V = X * W;                       % map back to d-dimensional image space
 
-% A*v has norm sqrt(lam), not 1, so renormalise every column to unit length.
-% After mean subtraction rank(A) <= M-1, so the last eigenvalue is ~0 and the
+% X*w has norm sqrt(lam), not 1, so renormalise every column to unit length.
+% After mean subtraction rank(X) <= N-1, so the last eigenvalue is ~0 and the
 % corresponding column is numerical noise; guard against dividing by ~0.
-for i = 1:size(U, 2)
-    nrm = norm(U(:, i));
+for l = 1:size(V, 2)
+    nrm = norm(V(:, l));
     if nrm > 1e-10
-        U(:, i) = U(:, i) / nrm;
+        V(:, l) = V(:, l) / nrm;
     end
 end
 
-% Eigenvalues of L are M times the eigenvalues of C = A*A'/M.
-lambda = eigvals / M;
+% Eigenvalues of L are N times the eigenvalues of C = X*X'/N.
+lambda = eigvals / N;
 end
 
 
@@ -1030,42 +1038,45 @@ end
 end
 
 
-function [Wopt, info] = fisherFromPCA(U, meanFace, X, y, m, verbose)
+function [Wopt, info] = fisherFromPCA(V, xbar, imgs, y, m, verbose)
 % FISHERFROMPCA  The Fisherfaces construction, stage 2.
 %
-%  Takes an ALREADY COMPUTED PCA basis U (so that sweeps over m do not
+%  Takes an ALREADY COMPUTED PCA basis V (so that sweeps over m do not
 %  recompute the expensive eigendecomposition) and returns
-%      Wopt = U_m * W_fld      (d x (c-1))
+%      Wopt = Vm * Wfld       (d x (c-1))
 %  the full projection from pixel space straight to the discriminant space.
 %
 %  Inputs
-%    U         d x M PCA basis from doPCA
-%    meanFace  d x 1
-%    X, y      training images (one per column) and labels
-%    m         how many principal components to keep before LDA
-%              (the paper uses m = N - c)
-%    verbose   0 = no diagnostics (fast, for sweeps)
-%              1 = also compute rank(S_W) and cond(S_W)
-%              2 = additionally cross-check against eig(S_B,S_W,'chol')
+%    V        d x N PCA basis (eigenfaces) from doPCA
+%    xbar     d x 1 mean face
+%    imgs, y  raw training images (one per column) and their class labels
+%    m        how many principal components to keep before LDA
+%             (the paper uses m = N - c)
+%    verbose  0 = no diagnostics (fast, for sweeps)
+%             1 = also compute rank(S_W) and cond(S_W)
+%             2 = additionally cross-check against eig(S_B,S_W,'chol')
+%
+%  Index convention matches the study guide: i over images, l over
+%  components, j over classes.
 
 classes = unique(y);
 c = numel(classes);
 
-Um = U(:, 1:m);
-A  = X - meanFace;
-Y  = Um' * A;                     % m x N : the training set in PCA space
+Vm    = V(:, 1:m);                % the eigenspace we work in
+X     = imgs - xbar;              % mean-deducted images
+Alpha = Vm' * X;                  % m x N : eigen-coefficients of every image
 
-% ---- scatter matrices, built in the m-dimensional space ----
-muY = mean(Y, 2);
+% ---- scatter matrices, built in the m-dimensional eigenspace ----
+alphaBar = mean(Alpha, 2);
 Sw = zeros(m, m);
 Sb = zeros(m, m);
-for i = 1:c
-    Yi = Y(:, y == classes(i));   % logical indexing picks this class's columns
-    ni = size(Yi, 2);
-    mi = mean(Yi, 2);
-    Di = Yi - mi;
-    Sw = Sw + Di * Di';                       % within-class scatter
-    Sb = Sb + ni * (mi - muY) * (mi - muY)';  % between-class scatter
+for j = 1:c
+    AlphaJ = Alpha(:, y == classes(j));   % logical indexing picks class j's columns
+    nj  = size(AlphaJ, 2);
+    muj = mean(AlphaJ, 2);                % class mean, in eigenspace
+    Dj  = AlphaJ - muj;
+    Sw = Sw + Dj * Dj';                                 % within-class scatter
+    Sb = Sb + nj * (muj - alphaBar) * (muj - alphaBar)'; % between-class scatter
 end
 
 % Both matrices are symmetric in exact arithmetic but floating point leaves
@@ -1075,8 +1086,8 @@ Sw = (Sw + Sw') / 2;
 Sb = (Sb + Sb') / 2;
 
 % ---- free correctness check: S_T = S_B + S_W ----
-Yc = Y - muY;
-St = Yc * Yc';
+AlphaC = Alpha - alphaBar;
+St = AlphaC * AlphaC';
 info.resST = norm(St - (Sb + Sw), 'fro') / norm(St, 'fro');
 
 % ---- solve  S_B w = lambda S_W w  by Cholesky whitening ----
@@ -1114,7 +1125,7 @@ Z = Z(:, idx);
 % are AT MOST c-1 useful Fisherfaces, no matter how big m is.
 Wfld = R \ Z(:, 1:(c-1));
 
-Wopt = Um * Wfld;
+Wopt = Vm * Wfld;
 
 % Scale each Fisherface to unit norm.  The Fisher criterion is invariant to
 % the scale of each direction, but nearest-neighbour distances are NOT, so we
