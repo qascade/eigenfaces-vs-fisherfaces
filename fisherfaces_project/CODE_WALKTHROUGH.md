@@ -403,6 +403,43 @@ the comparison is clean.
 
 ---
 
+## S14 / S15 — frequency content, and the six solver routes
+
+**S14** Fourier-transforms each basis image and reports a power-weighted mean
+radial frequency. It backs the claim that Fisherfaces are high-frequency with a
+number (3.85x the eigenfaces) and checks the *mechanism* by measuring the
+frequency of `S_W`'s own eigendirections by eigenvalue rank.
+
+**S15** solves the same `Sb`/`Sw` six different ways via `solveRoute`. Two things
+to know about that function:
+
+```matlab
+M = inv(Sw) * Sb;                                        %#ok<MINV>
+[Z, Dz] = eig(M); lam = diag(Dz); imagMax = max(abs(imag(lam)));
+```
+
+The `%#ok<MINV>` silences the editor's "don't use inv" warning — here we *want*
+the naive route, because measuring it is the point. `imagMax` records how complex
+the eigenvalues get: non-zero for routes 1, 2, 5, 6, exactly zero for 3 and 4
+(whose matrices are symmetric by construction).
+
+```matlab
+[Qa, ~] = qr(Wall{3}, 0);
+sv = svd(Qa' * Qb);
+ang = acosd(min(1, max(-1, min(sv))));
+```
+
+Comparing two subspaces, not two matrices. `J(WM) = J(W)` for invertible `M`, so
+the Fisherfaces are only defined up to a change of basis — comparing `Wf`
+entrywise would report spurious differences. The **largest principal angle**
+between the column spaces is the basis-independent comparison, and `min(sv)` of
+`Qa'*Qb` gives its cosine. The `min(1, max(-1, ...))` clamp guards against
+`acosd` receiving `1+1e-16` and returning complex.
+
+All six routes come out at `0.00 deg`, which is the result.
+
+---
+
 ## Local functions
 
 ### `loadFaces`

@@ -998,6 +998,59 @@ end
 fprintf('   => low rank (big lambda) is smooth, high rank (small lambda) is fine\n');
 fprintf('      detail, so inverting S_W pushes energy into the fine directions.\n');
 
+%% ====================================================================
+%% S15  SIX ROUTES TO THE SAME GENERALISED EIGENPROBLEM
+%
+%  S_B w = lambda S_W w can be solved several ways.  We use Cholesky
+%  whitening; this section checks that choice against the alternatives on
+%  identical S_B and S_W, and reports speed, whether the route produces
+%  complex eigenvalues, and whether the resulting (c-1)-dimensional
+%  subspace actually differs (largest principal angle against ours).
+%% ====================================================================
+
+fprintf('\n--- S15: ways of solving S_B w = lambda S_W w ---\n');
+
+rtCfgs = { 'ORL-32 ', orlFolders32, 6,  'hw3',    dORL; ...
+           'Yale-38', yaleFolders,  40, 'random', dYALE };
+rtNames = { '1 inv(Sw)*Sb, then eig', '2 Sw\Sb, then eig', ...
+            '3 Cholesky whitening  <-- ours', '4 symmetric sqrt Sw^-1/2', ...
+            '5 eig(Sb,Sw)  [QZ]', '6 eig(Sb,Sw,''chol'')' };
+
+for ri = 1:size(rtCfgs, 1)
+    rng(0);
+    [imTr, ytr, imTe, yte] = loadFaces(rtCfgs{ri,2}, rtCfgs{ri,3}, rtCfgs{ri,4}, rtCfgs{ri,5});
+    N = size(imTr, 2);
+    c = numel(rtCfgs{ri,2});
+    [V, ~, xbar] = doPCA(imTr);
+    X = imTr - xbar;  Xte = imTe - xbar;
+    m = N - c;
+    Vm = V(:, 1:m);  Al = Vm' * X;  ab = mean(Al, 2);
+    Sw = zeros(m, m); Sb = zeros(m, m);
+    for j = 1:c
+        Aj = Al(:, ytr == j); nj = size(Aj, 2); muj = mean(Aj, 2); Dj = Aj - muj;
+        Sw = Sw + Dj * Dj';
+        Sb = Sb + nj * (muj - ab) * (muj - ab)';
+    end
+    Sw = (Sw + Sw') / 2;  Sb = (Sb + Sb') / 2;
+    fprintf('\n  == %s ==  m = %d, cond(S_W) = %.3e\n', rtCfgs{ri,1}, m, cond(Sw));
+    fprintf('    %-32s %7s %8s %12s %12s\n', 'route', 'rate%', 'sec', 'max|imag|', 'angle vs #3');
+
+    Wall = cell(1, 6); rt = zeros(1,6); ts = zeros(1,6); imx = zeros(1,6);
+    for r = 1:6
+        [Wall{r}, ts(r), imx(r)] = solveRoute(r, Sw, Sb, Vm, c);
+        rt(r) = nnClassify(Wall{r}' * X, ytr, Wall{r}' * Xte, yte);
+    end
+    [Qa, ~] = qr(Wall{3}, 0);
+    for r = 1:6
+        [Qb, ~] = qr(Wall{r}, 0);
+        sv = svd(Qa' * Qb);
+        ang = acosd(min(1, max(-1, min(sv))));
+        fprintf('    %-32s %7.1f %8.2f %12.2e %9.2f deg\n', ...
+                rtNames{r}, rt(r), ts(r), imx(r), ang);
+    end
+    clear V X Xte imTr imTe Sw Sb Vm Al Wall;
+end
+
 fprintf('\n=====================================================\n');
 fprintf('  DONE\n');
 fprintf('=====================================================\n');
@@ -1395,4 +1448,47 @@ P = abs(fft2(reshape(v, H, W))).^2;
 tot = sum(P(:));
 centroid = sum(sum(P .* radGrid)) / tot;
 hiShare  = sum(sum(P .* (radGrid > 0.15))) / tot;
+end
+
+
+function [Wf, tsec, imagMax] = solveRoute(r, Sw, Sb, Vm, c)
+% SOLVEROUTE  One of six ways to solve S_B w = lambda S_W w.  Used by S15.
+%   Routes 1, 2, 5, 6 can return complex eigenvalues because the matrix they
+%   hand to eig is not symmetric (or, for 5/6, because the pencil is solved
+%   in general form); we record how large the imaginary parts get.
+t0 = tic;
+imagMax = 0;
+switch r
+    case 1                                   % inv(Sw)*Sb : the naive route
+        M = inv(Sw) * Sb;                                        %#ok<MINV>
+        [Z, Dz] = eig(M); lam = diag(Dz); imagMax = max(abs(imag(lam)));
+        [~, iz] = sort(real(lam), 'descend'); Wf = Vm * real(Z(:, iz(1:(c-1))));
+    case 2                                   % same, but solve instead of invert
+        M = Sw \ Sb;
+        [Z, Dz] = eig(M); lam = diag(Dz); imagMax = max(abs(imag(lam)));
+        [~, iz] = sort(real(lam), 'descend'); Wf = Vm * real(Z(:, iz(1:(c-1))));
+    case 3                                   % Cholesky whitening  (ours)
+        R = chol(Sw); M = (R') \ (Sb / R); M = (M + M') / 2;
+        [Z, Dz] = eig(M);
+        [~, iz] = sort(diag(Dz), 'descend'); Wf = Vm * (R \ Z(:, iz(1:(c-1))));
+    case 4                                   % symmetric square root
+        [Us, Ds] = eig(Sw); ds = diag(Ds);
+        Sih = Us * diag(1 ./ sqrt(max(ds, eps))) * Us';
+        M = Sih * Sb * Sih; M = (M + M') / 2;
+        [Z, Dz] = eig(M);
+        [~, iz] = sort(diag(Dz), 'descend'); Wf = Vm * (Sih * Z(:, iz(1:(c-1))));
+    case 5                                   % MATLAB's general pencil solver (QZ)
+        [Z, Dz] = eig(Sb, Sw); lam = diag(Dz); imagMax = max(abs(imag(lam)));
+        [~, iz] = sort(real(lam), 'descend'); Wf = Vm * real(Z(:, iz(1:(c-1))));
+    case 6                                   % MATLAB's packaged Cholesky route
+        [Z, Dz] = eig(Sb, Sw, 'chol'); lam = diag(Dz); imagMax = max(abs(imag(lam)));
+        [~, iz] = sort(real(lam), 'descend'); Wf = Vm * real(Z(:, iz(1:(c-1))));
+end
+tsec = toc(t0);
+for l = 1:size(Wf, 2)
+    nrm = norm(Wf(:, l));
+    if nrm > 1e-10
+        Wf(:, l) = Wf(:, l) / nrm;
+    end
+end
 end
