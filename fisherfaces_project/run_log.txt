@@ -158,6 +158,14 @@
   (c) off-diagonal energy of W'W      (Euclidean) = 4.986e-01
       off-diagonal energy of W'S_W W  (S_W-inner) = 3.787e-13
       => Fisherfaces are S_W-orthogonal, NOT Euclidean-orthogonal
+
+  (e) generalised eigenvalues of the pencil (S_B, S_W), ORL-32:
+      m = 160 eigenvalues in total, theory allows at most c-1 = 31 non-zero
+      largest 3 : 14947139.6441  71472.0202  18101.3102
+      l = c-2, c-1 (last two that may be non-zero): 13.7174  7.4684
+      l = c  (first that must vanish)             : 2.101e-12
+      largest |lambda| beyond index c-1           : 2.871e-12
+      ratio lambda_1 / max|lambda_{l>=c}|         : 5.205e+18
   (d) ORL-32: c = 32, so theory says rank(S_B) <= 31
       measured rank(S_B) = 31, number of fisherfaces = 31
 
@@ -219,18 +227,18 @@
     1 inv(Sw)*Sb, then eig              90.6     0.01     9.34e-10      0.00 deg
     2 Sw\Sb, then eig                   90.6     0.01     1.27e-09      0.00 deg
     3 Cholesky whitening  <-- ours      90.6     0.00     0.00e+00      0.00 deg
-    4 symmetric sqrt Sw^-1/2            90.6     0.01     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            90.6     0.00     0.00e+00      0.00 deg
     5 eig(Sb,Sw)  [QZ]                  90.6     0.00     0.00e+00      0.00 deg
     6 eig(Sb,Sw,'chol')                 90.6     0.00     0.00e+00      0.00 deg
 
   == Yale-38 ==  m = 1482, cond(S_W) = 4.187e+11
     route                              rate%      sec    max|imag|  angle vs #3
-    1 inv(Sw)*Sb, then eig              95.5     1.01     8.43e-09      0.00 deg
-    2 Sw\Sb, then eig                   95.5     0.75     8.30e-09      0.00 deg
-    3 Cholesky whitening  <-- ours      95.5     0.45     0.00e+00      0.00 deg
-    4 symmetric sqrt Sw^-1/2            95.5     1.09     0.00e+00      0.00 deg
-    5 eig(Sb,Sw)  [QZ]                  95.5     0.44     0.00e+00      0.00 deg
-    6 eig(Sb,Sw,'chol')                 95.5     0.38     0.00e+00      0.00 deg
+    1 inv(Sw)*Sb, then eig              95.5     0.93     8.43e-09      0.00 deg
+    2 Sw\Sb, then eig                   95.5     0.68     8.30e-09      0.00 deg
+    3 Cholesky whitening  <-- ours      95.5     0.36     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            95.5     0.86     0.00e+00      0.00 deg
+    5 eig(Sb,Sw)  [QZ]                  95.5     0.42     0.00e+00      0.00 deg
+    6 eig(Sb,Sw,'chol')                 95.5     0.41     0.00e+00      0.00 deg
 
 =====================================================
   DONE

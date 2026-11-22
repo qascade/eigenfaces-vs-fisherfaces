@@ -1204,6 +1204,223 @@ and $\Sw^{-1}$ divides by exactly those.
 makes $\Sw$ invertible'' but the wrong answer to ``what value of $m$ gives the best
 recogniser''. We show this empirically in Section~\ref{sec:msweep}.
 
+\section{The generalised eigenvalue problem}
+\label{sec:gevp}
+
+Everything in Part~II ended at the same equation, $\Sb w = \lambda \Sw w$. It is
+worth stopping to study that object in its own right, because all the structural
+facts about Fisherfaces --- how many there are, why the eigenvalues are real, why
+the Fisherfaces are $\Sw$-orthogonal and not Euclidean-orthogonal, and what
+exactly goes wrong when $\Sw$ is singular --- are properties of this problem, not
+of faces.
+
+\subsection{Definition, and the three cases}
+
+\begin{definition}
+Given two $m\times m$ matrices $A$ and $B$, the pair $(A,B)$ is called a
+\emph{matrix pencil}. A scalar $\lambda$ and a vector $w \neq 0$ with
+\[
+  A w \;=\; \lambda\, B w
+\]
+are a \emph{generalised eigenvalue} and \emph{generalised eigenvector} of the
+pencil. Setting $B=I$ recovers the ordinary eigenproblem.
+\end{definition}
+
+For us $A=\Sb$ and $B=\Sw$. Three cases behave very differently, and knowing
+which one you are in is the whole game:
+
+\begin{enumerate}[leftmargin=*,label=(\alph*)]
+\item \textbf{$B$ nonsingular.} The problem is equivalent to the ordinary
+  eigenproblem for $B^{-1}A$ and has exactly $m$ finite eigenvalues. This is the
+  case the two-stage recipe manufactures by projecting to $m=N-c$ dimensions.
+\item \textbf{$B$ singular, but $A$ and $B$ share no null vector.} Take $w$ with
+  $Bw = 0$ and $Aw \neq 0$. Then $Aw = \lambda Bw = 0$ has no finite solution, and
+  the convention is to say the pencil has an \emph{infinite} eigenvalue. The
+  pencil still makes sense, but has fewer than $m$ finite eigenvalues.
+\item \textbf{$A$ and $B$ share a null vector.} If $Aw = Bw = 0$ for some
+  $w\neq0$, then $Aw = \lambda Bw$ holds for \emph{every} $\lambda$. The pencil is
+  called \emph{singular} and its eigenvalues are simply not defined. This is the
+  genuinely bad case.
+\end{enumerate}
+
+\begin{gotcha}[Case (b) is not a disaster --- it is null-space LDA]
+An infinite eigenvalue means a direction $w$ with $w^{\!\top}\Sw w = 0$ but
+$w^{\!\top}\Sb w > 0$: the classes have \emph{zero} spread along it and their means
+still differ. The Fisher criterion $J(w)$ is then infinite --- a perfectly
+discriminative direction, at least on the training set. Chasing exactly these
+directions is what null-space LDA (Section~\ref{sec:alternatives}) does. The
+reason we do not is that with $d\gg N$ there are tens of thousands of such
+directions and almost all of them are accidents of having too few samples.
+\end{gotcha}
+
+\begin{gotcha}[Case (c) is what $m>N-c$ actually produces]
+Beyond $m = N-c$ the matrices $\Sw$ and $\Sb$ do share null vectors, so the pencil
+becomes singular in the technical sense above and ``the eigenvalues'' stop being a
+well-posed question. That is the real reason the recipe caps $m$ at $N-c$ --- not
+merely that $\Sw^{-1}$ fails to exist, but that the problem itself stops having a
+unique answer. It is also why \texttt{chol} refusing (Section~\ref{sec:alternatives})
+is the right behaviour rather than an inconvenience.
+\end{gotcha}
+
+\subsection{The good case: a symmetric-definite pencil}
+
+Our pencil, after the PCA stage, has more structure than a general one:
+$\Sb$ is symmetric positive semi-definite, and $\Sw$ is symmetric
+\emph{positive definite}. Such a pair is called a \textbf{symmetric-definite
+pencil}, and it is as well behaved as the ordinary symmetric eigenproblem.
+
+\begin{theorem}[Simultaneous diagonalisation]
+\label{thm:simdiag}
+Let $A$ be symmetric and $B$ symmetric positive definite, both $m\times m$. Then
+there is a nonsingular $W\in\R^{m\times m}$ with
+\[
+  W^{\!\top} B\, W \;=\; I,
+  \qquad
+  W^{\!\top} A\, W \;=\; \Lambda = \operatorname{diag}(\lambda_1,\dots,\lambda_m),
+\]
+all $\lambda_l$ real, and the columns of $W$ satisfy $A w_l = \lambda_l B w_l$.
+\end{theorem}
+
+\begin{proof}
+Because $B$ is symmetric positive definite it has a Cholesky factorisation
+$B = R^{\!\top}R$ with $R$ upper triangular and invertible. Define
+\[
+  M \;:=\; R^{-\top} A\, R^{-1}.
+\]
+$M$ is symmetric, since
+$M^{\!\top} = R^{-\top}A^{\!\top}R^{-1} = R^{-\top}AR^{-1} = M$ using $A^{\!\top}=A$.
+By the spectral theorem a real symmetric matrix can be written $M = Z\Lambda Z^{\!\top}$
+with $Z$ orthogonal ($Z^{\!\top}Z=I$) and $\Lambda$ real diagonal. Now set
+\[
+  W \;:=\; R^{-1}Z ,
+\]
+which is nonsingular as a product of nonsingular matrices. Check the two claims
+directly:
+\[
+  W^{\!\top} B W = Z^{\!\top}R^{-\top}\,(R^{\!\top}R)\,R^{-1}Z = Z^{\!\top}Z = I,
+\]
+\[
+  W^{\!\top} A W = Z^{\!\top}R^{-\top} A R^{-1} Z = Z^{\!\top} M Z = \Lambda .
+\]
+For the last claim, start from $Mz_l = \lambda_l z_l$, i.e.\
+$R^{-\top}AR^{-1}z_l = \lambda_l z_l$, and multiply on the left by $R^{\!\top}$:
+\[
+  A R^{-1} z_l \;=\; \lambda_l R^{\!\top} z_l .
+\]
+Since $w_l = R^{-1}z_l$, equivalently $z_l = Rw_l$, this reads
+$A w_l = \lambda_l R^{\!\top}R\, w_l = \lambda_l B w_l$.
+\end{proof}
+
+Three consequences fall straight out, and they are exactly the facts used
+elsewhere in this guide.
+
+\begin{corollary}[Real eigenvalues]
+The $\lambda_l$ are real, because they are the eigenvalues of the real symmetric
+matrix $M$. No symmetry assumption about $B^{-1}A$ is needed --- indeed $B^{-1}A$
+is generally \emph{not} symmetric, which is why the naive route
+(Section~\ref{sec:routes}) has no such guarantee.
+\end{corollary}
+
+\begin{corollary}[$B$-orthogonality]
+$W^{\!\top}BW = I$ says precisely $w_l^{\!\top}B\,w_{l'} = \delta_{ll'}$. With
+$B=\Sw$ this is the $\Sw$-orthogonality of the Fisherfaces. They are orthonormal
+in the inner product $\langle u,v\rangle_{\Sw} = u^{\!\top}\Sw v$, and there is no
+reason for them to be orthonormal in the ordinary one --- that would need
+$\Sw = I$.
+\end{corollary}
+
+\begin{corollary}[How many non-zero eigenvalues]
+$M = R^{-\top}\Sb R^{-1}$ is a \emph{congruence} transformation of $\Sb$ by an
+invertible matrix, and congruence preserves rank. So
+$\rank(M) = \rank(\Sb) \le c-1$ by Theorem~\ref{thm:rankSb}, and the pencil has at
+most $c-1$ non-zero eigenvalues however large $m$ is. The remaining $m-(c-1)$ are
+zero, and their eigenvectors are an arbitrary basis of a null space --- which is
+why we keep only the first $c-1$ columns.
+\end{corollary}
+
+\begin{observation}[The rank bound is visible as a cliff in the spectrum]
+Section S12(e) computes all $m=160$ generalised eigenvalues of $(\Sb,\Sw)$ on
+ORL-32, where $c-1 = 31$:
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+$\lambda_1,\lambda_2,\lambda_3$ & $1.49\times10^{7}$, \; $7.15\times10^{4}$, \; $1.81\times10^{4}$ \\
+$\lambda_{30}, \lambda_{31}$ \;(last two allowed to be non-zero) & $13.72$, \; $7.47$ \\
+$\lambda_{32}$ \;(first that \emph{must} vanish) & $2.10\times10^{-12}$ \\
+largest $|\lambda_l|$ for $l \ge 32$ & $2.87\times10^{-12}$ \\
+\midrule
+$\lambda_1 \,/\, \max_{l\ge32}|\lambda_l|$ & $5.21\times10^{18}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Between $\lambda_{31}=7.47$ and $\lambda_{32}=2.1\times10^{-12}$ the spectrum
+falls off a cliff of roughly \textbf{twelve orders of magnitude}, and every
+eigenvalue past index $31$ is at the level of round-off. The corollary is not an
+abstract bound that happens to hold --- it shows up as a visible discontinuity in
+the numbers, exactly at $l = c-1$.
+
+Two things follow. The eigenvalues past $c-1$ being $10^{-12}$ rather than exactly
+$0$ is ordinary floating-point noise, not a rank violation. And their
+eigenvectors are an arbitrary basis of a null space, so keeping them would add
+pure noise as ``discriminant directions'' --- which is why the code truncates at
+$c-1$ rather than trusting the solver's ordering.
+\end{observation}
+
+\subsection{Why the eigenvalue \emph{is} the criterion}
+
+We asserted this in Part~II; here is the clean statement and proof.
+
+\begin{theorem}[Generalised Rayleigh quotient]
+\label{thm:rayleigh}
+For a symmetric-definite pencil $(A,B)$,
+\[
+  \max_{w\neq0}\; \frac{w^{\!\top}Aw}{w^{\!\top}Bw} \;=\; \lambda_{\max},
+\]
+attained at the corresponding generalised eigenvector. More generally the $l$th
+largest value, maximised over directions $B$-orthogonal to the first $l-1$
+eigenvectors, is $\lambda_l$.
+\end{theorem}
+
+\begin{proof}
+Substitute $w = R^{-1}z$; since $R$ is invertible this is a bijection between
+non-zero $w$ and non-zero $z$, so it cannot change the maximum. The numerator and
+denominator become
+\[
+  w^{\!\top}Aw = z^{\!\top}R^{-\top}AR^{-1}z = z^{\!\top}Mz,
+  \qquad
+  w^{\!\top}Bw = z^{\!\top}R^{-\top}\,(R^{\!\top}R)\,R^{-1}z = z^{\!\top}z .
+\]
+So the generalised Rayleigh quotient of $(A,B)$ at $w$ equals the \emph{ordinary}
+Rayleigh quotient of $M$ at $z$:
+\[
+  \frac{w^{\!\top}Aw}{w^{\!\top}Bw} \;=\; \frac{z^{\!\top}Mz}{z^{\!\top}z}.
+\]
+The ordinary Rayleigh quotient of a symmetric matrix is maximised by its top
+eigenvector and equals its top eigenvalue --- which is the $B=I$ case we already
+proved in Section~\ref{sec:view1}. Mapping back through $w = R^{-1}z$ gives the
+result, and the eigenvalues of $M$ are the generalised eigenvalues of $(A,B)$ by
+Theorem~\ref{thm:simdiag}.
+\end{proof}
+
+With $A=\Sb$, $B=\Sw$ this says $\lambda_l = J(w_l)$: \textbf{the $l$th
+generalised eigenvalue is literally the Fisher criterion value of the $l$th
+Fisherface.} Sorting eigenvalues descending is sorting discriminant directions by
+how well they separate the classes, and nothing more mysterious.
+
+\subsection{A note on how software reports these}
+
+Numerical libraries avoid dividing by zero by returning eigenvalues as
+\emph{pairs} $(\alpha_l, \beta_l)$ with
+\[
+  \beta_l\, A w_l \;=\; \alpha_l\, B w_l , \qquad \lambda_l = \alpha_l/\beta_l ,
+\]
+so that $\beta_l = 0$ encodes the infinite eigenvalue of case (b) without
+overflowing. MATLAB's \texttt{eig(A,B)} hides this and hands back $\lambda$
+directly, returning \texttt{Inf} where $\beta_l=0$; the QZ algorithm it uses
+underneath works with the pair. This is why route 5 of Section~\ref{sec:routes}
+can run even when $B$ is singular, while \texttt{chol} refuses --- QZ does not
+need $B^{-1}$ to exist.
+
 \section{Solving \texorpdfstring{$\Sb w=\lambda\Sw w$}{Sb w = lambda Sw w} properly}
 \label{sec:solve}
 
@@ -2429,6 +2646,29 @@ $w^{\!\top}\Sw w=1$ and use a Lagrange multiplier: $\Sb w=\lambda\Sw w$. For two
 classes $\Sb=\frac{n_1n_2}{n}\delta\delta^{\!\top}$ is rank one with
 $\delta=\mu_1-\mu_2$; substituting and cancelling scalars gives
 $w\propto\Sw^{-1}(\mu_1-\mu_2)$. (Section~\ref{sec:twoclass})
+
+\item[What is a generalised eigenvalue problem, and why is ours a nice one?]
+A pencil $(A,B)$ with $Aw=\lambda Bw$; $B=I$ gives the ordinary problem. Ours is a
+\emph{symmetric-definite} pencil ($\Sb$ symmetric PSD, $\Sw$ symmetric PD), which
+is as well behaved as the ordinary symmetric case: Theorem~\ref{thm:simdiag} gives
+a single $W$ with $W^{\!\top}\Sw W=I$ and $W^{\!\top}\Sb W=\Lambda$ simultaneously.
+Real eigenvalues, $\Sw$-orthogonal eigenvectors and the $c-1$ ceiling are all
+corollaries of that one theorem. See Section~\ref{sec:gevp}.
+
+\item[What happens to the pencil when $\Sw$ is singular?]
+Two different things. If $\Sw w=0$ but $\Sb w\neq0$ the eigenvalue is
+\emph{infinite} --- a direction with zero within-class spread and separated means,
+which is exactly what null-space LDA hunts for. If instead $\Sb w=\Sw w=0$ then
+$\Sb w=\lambda\Sw w$ holds for \emph{every} $\lambda$: the pencil is
+\emph{singular} and its eigenvalues are undefined. Past $m=N-c$ we are in the
+second case, so the real objection to a large $m$ is not that $\Sw^{-1}$ fails to
+exist but that the problem stops having a unique answer.
+
+\item[Why exactly $c-1$ non-zero eigenvalues?]
+$M = R^{-\top}\Sb R^{-1}$ is a congruence of $\Sb$ by an invertible matrix, and
+congruence preserves rank, so $\rank(M)=\rank(\Sb)\le c-1$. Measured on ORL-32
+(S12(e)): $\lambda_{31}=7.47$ and $\lambda_{32}=2.1\times10^{-12}$ --- a cliff of
+twelve orders of magnitude exactly at $l=c-1$.
 
 \item[What is the eigenvalue $\lambda$, physically?]
 Multiplying $\Sb w=\lambda\Sw w$ on the left by $w^{\!\top}$ gives

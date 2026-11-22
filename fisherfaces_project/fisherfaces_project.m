@@ -844,6 +844,41 @@ for i = 1:keepORL.c
     SbO = SbO + ni * (mi - alphaBar) * (mi - alphaBar)';
 end
 SbO = (SbO + SbO') / 2;
+% ---- (e) the generalised eigenvalue spectrum of the pencil (S_B, S_W) ----
+% Theory: the pencil has m eigenvalues, of which at most c-1 are non-zero
+% (because rank(S_B) <= c-1).  The non-zero ones ARE the Fisher criterion
+% values J(w_l).  Everything past index c-1 should be numerically zero.
+mE   = keepORL.N - keepORL.c;
+VmE  = keepORL.V(:, 1:mE);
+AlE  = VmE' * (keepORL.imTr - keepORL.xbar);
+abE  = mean(AlE, 2);
+SwE  = zeros(mE, mE);
+SbE  = zeros(mE, mE);
+for j = 1:keepORL.c
+    Aj = AlE(:, keepORL.ytr == j);
+    nj = size(Aj, 2);
+    mj = mean(Aj, 2);
+    Dj = Aj - mj;
+    SwE = SwE + Dj * Dj';
+    SbE = SbE + nj * (mj - abE) * (mj - abE)';
+end
+SwE = (SwE + SwE') / 2;
+SbE = (SbE + SbE') / 2;
+RE  = chol(SwE);
+ME  = (RE') \ (SbE / RE); ME = (ME + ME') / 2;
+lamE = sort(eig(ME), 'descend');
+fprintf('\n  (e) generalised eigenvalues of the pencil (S_B, S_W), ORL-32:\n');
+fprintf('      m = %d eigenvalues in total, theory allows at most c-1 = %d non-zero\n', ...
+        mE, keepORL.c - 1);
+fprintf('      largest 3 : %.4f  %.4f  %.4f\n', lamE(1), lamE(2), lamE(3));
+fprintf('      l = c-2, c-1 (last two that may be non-zero): %.4f  %.4f\n', ...
+        lamE(keepORL.c-2), lamE(keepORL.c-1));
+fprintf('      l = c  (first that must vanish)             : %.3e\n', lamE(keepORL.c));
+fprintf('      largest |lambda| beyond index c-1           : %.3e\n', ...
+        max(abs(lamE(keepORL.c:end))));
+fprintf('      ratio lambda_1 / max|lambda_{l>=c}|         : %.3e\n', ...
+        lamE(1) / max(abs(lamE(keepORL.c:end))));
+
 fprintf('  (d) ORL-32: c = %d, so theory says rank(S_B) <= %d\n', keepORL.c, keepORL.c - 1);
 fprintf('      measured rank(S_B) = %d, number of fisherfaces = %d\n', ...
         rank(SbO), size(keepORL.Wopt, 2));
