@@ -169,6 +169,14 @@
   (d) ORL-32: c = 32, so theory says rank(S_B) <= 31
       measured rank(S_B) = 31, number of fisherfaces = 31
 
+  (f) upper (R'R) vs lower (LL') Cholesky, ORL-32, m = 160:
+      ||L - R'|| / ||R||                 : 5.439e-14
+      ||M_up - M_lo|| / ||M_up||         : 5.862e-11  <- same inner matrix
+      max|lam_up - lam_lo| / lam_up(1)   : 5.847e-11
+      worst |cos| between the 31 pairs   : 1.00000000  (1 = same direction)
+      ||W'*S_W*W - I|| / sqrt(c-1)       : 4.607e-12  <- S_W-orthogonality
+      => the choice of convention is bookkeeping, not mathematics
+
 --- S13: alternative ways to handle a singular S_W ---
 
   == ORL-32  ==  (N = 192, c = 32, N-c = 160, N-1 = 191)
@@ -224,21 +232,21 @@
 
   == ORL-32  ==  m = 160, cond(S_W) = 7.849e+07
     route                              rate%      sec    max|imag|  angle vs #3
-    1 inv(Sw)*Sb, then eig              90.6     0.01     9.34e-10      0.00 deg
+    1 inv(Sw)*Sb, then eig              90.6     0.02     9.34e-10      0.00 deg
     2 Sw\Sb, then eig                   90.6     0.01     1.27e-09      0.00 deg
-    3 Cholesky whitening  <-- ours      90.6     0.00     0.00e+00      0.00 deg
-    4 symmetric sqrt Sw^-1/2            90.6     0.00     0.00e+00      0.00 deg
-    5 eig(Sb,Sw)  [QZ]                  90.6     0.00     0.00e+00      0.00 deg
-    6 eig(Sb,Sw,'chol')                 90.6     0.00     0.00e+00      0.00 deg
+    3 Cholesky whitening  <-- ours      90.6     0.01     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            90.6     0.01     0.00e+00      0.00 deg
+    5 eig(Sb,Sw)  [QZ]                  90.6     0.01     0.00e+00      0.00 deg
+    6 eig(Sb,Sw,'chol')                 90.6     0.01     0.00e+00      0.00 deg
 
   == Yale-38 ==  m = 1482, cond(S_W) = 4.187e+11
     route                              rate%      sec    max|imag|  angle vs #3
-    1 inv(Sw)*Sb, then eig              95.5     0.93     8.43e-09      0.00 deg
-    2 Sw\Sb, then eig                   95.5     0.68     8.30e-09      0.00 deg
-    3 Cholesky whitening  <-- ours      95.5     0.36     0.00e+00      0.00 deg
-    4 symmetric sqrt Sw^-1/2            95.5     0.86     0.00e+00      0.00 deg
-    5 eig(Sb,Sw)  [QZ]                  95.5     0.42     0.00e+00      0.00 deg
-    6 eig(Sb,Sw,'chol')                 95.5     0.41     0.00e+00      0.00 deg
+    1 inv(Sw)*Sb, then eig              95.5     2.68     8.43e-09      0.00 deg
+    2 Sw\Sb, then eig                   95.5     1.37     8.30e-09      0.00 deg
+    3 Cholesky whitening  <-- ours      95.5     1.01     0.00e+00      0.00 deg
+    4 symmetric sqrt Sw^-1/2            95.5     1.49     0.00e+00      0.00 deg
+    5 eig(Sb,Sw)  [QZ]                  95.5     0.60     0.00e+00      0.00 deg
+    6 eig(Sb,Sw,'chol')                 95.5     0.66     0.00e+00      0.00 deg
 
 =====================================================
   DONE

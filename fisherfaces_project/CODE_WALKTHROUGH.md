@@ -393,10 +393,22 @@ Wf = Vm * real(Z(:, iz(1:(c-1))));
 ```
 
 Note the two `real(...)` calls. `pinv(Sw)*Sb` is **not symmetric**, so `eig` can
-return complex eigenvalues and eigenvectors from round-off. Taking real parts
-makes it run, but needing to do so at all is the argument against this route —
-and it is why the main path uses Cholesky whitening, which cannot produce
-complex values.
+return complex eigenvalues and eigenvectors from round-off. Be honest about the
+size of that effect: S15 measures it at `8.4e-9` on Yale even at
+`cond(S_W) = 4.2e11`, and the resulting subspace agrees with the Cholesky one to
+`0.00°` for the same `95.5%` rate. So the real parts are not rescuing a broken
+answer — the answer is fine.
+
+The argument for Cholesky here is therefore *not* accuracy on this data. It is
+that (a) you need these cleanup calls at all, (b) you lose the `S_W`-orthogonality
+that lets you check your own output, and (c) it is about `2.7×` slower on Yale.
+
+Quote that as a **ratio**, not in seconds. Across three runs route 1 took `0.93`,
+`2.16`, `2.68` s while route 3 took `0.36`, `0.77`, `1.01` s — the absolute times
+moved by nearly `3×` depending on what else the machine was doing, but the ratio
+stayed at `2.58`, `2.81`, `2.65`. A lone wall-clock number is not reproducible;
+a ratio measured inside one run largely is. State it that way if asked — the
+measurement is the stronger position.
 
 `rng(0)` is reset before loading, so every variant sees the identical split and
 the comparison is clean.
@@ -574,6 +586,25 @@ Minner = (R') \ (Sb / R);
 `inv(R')*Sb*inv(R)` without ever forming an inverse. `Sb / R` solves from the
 right; `(R') \ X` solves from the left. The result is symmetric (see the PDF
 derivation), which is the entire point of the manoeuvre.
+
+**Why upper and not lower.** `chol(Sw)` returns the *upper* factor `R` with
+`R'*R == Sw`, so the line is written to match. The textbook form `Sw = L*L'` with
+`L` lower triangular is the same factorisation transposed (`L = R'`), and it
+yields the **identical** inner matrix: `L \ (Sb / L')` equals `(R') \ (Sb / R)`.
+If you preferred it, `L = chol(Sw,'lower')` and that one line changes; nothing
+else does. Both forms are triangular solves, so neither inverts anything.
+
+S12(f) measures this on the real ORL matrices rather than asserting it:
+`‖M_up − M_lo‖/‖M_up‖ = 5.86e-11`, `max|λ_up − λ_lo|/λ₁ = 5.85e-11`, and the worst
+`|cos|` over all 31 Fisherface pairs is `1.00000000`.
+
+Note every figure there is **relative**. `S_B` has entries of order `1e7` on this
+data, so the raw `‖M_up − M_lo‖` is `8.8e-4` — which looks alarming and means
+nothing until you divide by `‖M‖ = λ₁ = 1.49e7`. An absolute residual is
+uninterpretable without the scale of the thing it is a residual of. The script
+gets this right elsewhere (the `S_T = S_B + S_W` check divides by `‖S_T‖`, and the
+ridge is scaled by `trace(S_W)/m`), and this block was written the same way only
+after a first version printed the bare norm.
 
 ```matlab
 Wfld = R \ Z(:, 1:(c-1));

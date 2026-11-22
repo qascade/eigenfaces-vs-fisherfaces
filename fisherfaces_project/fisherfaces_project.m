@@ -883,6 +883,63 @@ fprintf('  (d) ORL-32: c = %d, so theory says rank(S_B) <= %d\n', keepORL.c, kee
 fprintf('      measured rank(S_B) = %d, number of fisherfaces = %d\n', ...
         rank(SbO), size(keepORL.Wopt, 2));
 
+% ---- (f) upper vs lower Cholesky: the same factorisation, written twice ----
+% chol(Sw) returns the UPPER factor R, meaning R'*R = Sw.  That is what the main
+% code uses.  Most textbooks instead write Sw = L*L' with L LOWER triangular.
+% Claim: L is simply R transposed, so both routes must give the same Fisherfaces.
+% We check that instead of believing it.  Reuses SwE and SbE built in part (e).
+
+LE = chol(SwE, 'lower');          % lower factor, so that LE*LE' = SwE
+
+% Build the whitened matrix M in both conventions.
+M_up = (RE') \ (SbE / RE);        % upper:  M = inv(R')  * Sb * inv(R)
+M_lo = LE    \ (SbE / LE');       % lower:  M = inv(L)   * Sb * inv(L')
+
+% Both are symmetric, so plain eig is safe.  Sort largest eigenvalue first.
+[Z_up, D_up] = eig((M_up + M_up') / 2);
+[Z_lo, D_lo] = eig((M_lo + M_lo') / 2);
+[lam_up, ord_up] = sort(diag(D_up), 'descend');
+[lam_lo, ord_lo] = sort(diag(D_lo), 'descend');
+
+% Keep the c-1 directions we would actually use, mapping each z back to a w.
+nf   = keepORL.c - 1;
+W_up = zeros(mE, nf);
+W_lo = zeros(mE, nf);
+for l = 1:nf
+    z_up = Z_up(:, ord_up(l));    % l-th eigenvector from the upper route
+    z_lo = Z_lo(:, ord_lo(l));    % l-th eigenvector from the lower route
+    W_up(:, l) = RE  \ z_up;      % w = inv(R) *z, i.e. solve R *w = z
+    W_lo(:, l) = LE' \ z_lo;      % w = inv(L')*z, i.e. solve L'*w = z
+end
+
+% Compare the two answers one direction at a time.  We take |cos(angle)| because
+% an eigenvector's sign is arbitrary, so a value of 1 means "same direction".
+worstCos = 1;
+for l = 1:nf
+    a   = W_up(:, l) / norm(W_up(:, l));
+    b   = W_lo(:, l) / norm(W_lo(:, l));
+    cosAngle = abs(a' * b);
+    if cosAngle < worstCos
+        worstCos = cosAngle;
+    end
+end
+
+% Report RELATIVE differences.  S_B here has entries of order 1e7, so an
+% absolute norm of 1e-4 would look alarming while actually being round-off.
+% Dividing by the size of the thing we are comparing makes the number readable.
+fprintf('\n  (f) upper (R''R) vs lower (LL'') Cholesky, ORL-32, m = %d:\n', mE);
+fprintf('      ||L - R''|| / ||R||                 : %.3e\n', ...
+        norm(LE - RE') / norm(RE));
+fprintf('      ||M_up - M_lo|| / ||M_up||         : %.3e  <- same inner matrix\n', ...
+        norm(M_up - M_lo) / norm(M_up));
+fprintf('      max|lam_up - lam_lo| / lam_up(1)   : %.3e\n', ...
+        max(abs(lam_up - lam_lo)) / lam_up(1));
+fprintf('      worst |cos| between the %2d pairs   : %.8f  (1 = same direction)\n', ...
+        nf, worstCos);
+fprintf('      ||W''*S_W*W - I|| / sqrt(c-1)       : %.3e  <- S_W-orthogonality\n', ...
+        norm(W_up' * SwE * W_up - eye(nf)) / sqrt(nf));
+fprintf('      => the choice of convention is bookkeeping, not mathematics\n');
+
 %% ====================================================================
 %% S13  WHY PCA-THEN-LDA, AND NOT ONE OF THE OTHER FIXES?
 %
@@ -1344,9 +1401,16 @@ info.resST = norm(St - (Sb + Sw), 'fro') / norm(St, 'fro');
 %       S_B inv(R) z = lambda R'R inv(R) z = lambda R' z
 %  and multiplying on the left by inv(R'):
 %       inv(R') S_B inv(R) z = lambda z
-%  which is an ORDINARY eigenproblem for a SYMMETRIC matrix.  That matters:
-%  the obvious alternative inv(S_W)*S_B is NOT symmetric, so round-off can
-%  hand back complex eigenvalues and non-orthogonal eigenvectors.
+%  which is an ORDINARY eigenproblem for a SYMMETRIC matrix.
+%
+%  Why bother?  Note first that S_W IS invertible here: we are in the reduced
+%  m-dimensional PCA space with m <= N-c, not in pixel space.  So the obvious
+%  alternative inv(S_W)*S_B can be formed, and S15 measures that it gives the
+%  SAME answer (0.00 deg, same recognition rate).  We use Cholesky anyway
+%  because: it is ~2.6x faster, it needs no real()/re-sort cleanup, and the
+%  symmetric solver GUARANTEES real eigenvalues and S_W-orthogonal vectors
+%  rather than happening to produce them.  inv(S_W)*S_B is not symmetric,
+%  since its transpose is S_B*inv(S_W), so it carries no such guarantee.
 [R, p] = chol(Sw);
 info.usedReg = 0;
 if p ~= 0

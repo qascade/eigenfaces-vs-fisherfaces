@@ -1421,27 +1421,190 @@ underneath works with the pair. This is why route 5 of Section~\ref{sec:routes}
 can run even when $B$ is singular, while \texttt{chol} refuses --- QZ does not
 need $B^{-1}$ to exist.
 
+\section{What the paper specifies, and what it leaves to you}
+\label{sec:paperscope}
+
+Before comparing solvers it is worth being clear about how much of this the
+original paper actually prescribes, because ``why did you do it \emph{this}
+way?'' has a different answer depending on whether the paper made the choice or
+we did. We checked the published text rather than relying on memory.
+
+\paragraph{On the generalised eigenproblem: nothing at all.}
+The paper's complete treatment is two sentences. It defines the solution as
+\begin{quote}
+``where $w_i \mid i=1,2,\ldots,m$ is the set of generalized eigenvectors of
+$\Sb$ and $\Sw$ corresponding to the $m$ largest generalized eigenvalues
+$\lambda_i$, i.e., $\Sb w_i = \lambda_i \Sw w_i$''
+\end{quote}
+and then bounds how many there are:
+\begin{quote}
+``Note that there are at most $c-1$ nonzero generalized eigenvalues, and so an
+upper bound on $m$ is $c-1$, where $c$ is the number of classes. See [4].''
+\end{quote}
+Reference [4] is Duda \& Hart, \emph{Pattern Classification and Scene
+Analysis} (1973) --- a pattern-recognition textbook, cited for the \emph{rank
+bound}, not for numerics. Searching the full text finds \textbf{no} mention of
+Cholesky factorisation, whitening, simultaneous diagonalisation, the QZ
+algorithm, pseudo-inverses, or any numerical library, and the bibliography
+contains no numerical-linear-algebra reference at all. The authors state
+\emph{what} to compute and leave \emph{how} to the reader's library.
+
+Everything in Section~\ref{sec:solve} is therefore ours, not the paper's. That
+is the honest answer to ``why Cholesky?'': the paper does not say, so we chose,
+and Section~\ref{sec:routes} measures the consequences of the choice.
+
+\paragraph{On the singularity of $\Sw$: explicit, and it matches our account.}
+Here the paper is precise, and note that its criterion is \emph{conditional}:
+``If $\Sw$ is nonsingular, the optimal projection $W_{opt}$ is chosen as\ldots''
+It then explains why that condition fails for faces:
+\begin{quote}
+``one is confronted with the difficulty that the within-class scatter matrix
+$\Sw \in \mathbb{R}^{n\times n}$ is always singular. This stems from the fact
+that the rank of $\Sw$ is at most $N-c$, and, in general, the number of images
+in the learning set $N$ is much smaller than the number of pixels in each image
+$n$.''
+\end{quote}
+and gives exactly one remedy:
+\begin{quote}
+``projecting the image set to a lower dimensional space so that the resulting
+within-class scatter matrix $\Sw$ is nonsingular. This is achieved by using PCA
+to reduce the dimension of the feature space to $N-c$, and then applying the
+standard FLD \ldots to reduce the dimension to $c-1$.''
+\end{quote}
+This is the resolution of the apparent paradox in Section~\ref{sec:routes}: how
+can route~1 invert $\Sw$ when $\Sw$ is singular? Because singularity is a
+statement about the $n\times n$ pixel-space matrix, and by the time any solver
+runs we are in the reduced $m$-dimensional space where $\Sw$ has full rank $m$.
+The $m$-sweep in Section~\ref{sec:msweep} shows $\operatorname{rank}(\Sw)=m$ on
+every row.
+
+\paragraph{On regularisation: the paper has none.}
+No ridge, no $\varepsilon I$, no pseudo-inverse appears anywhere in it.
+Dimension reduction is its only fix. The regularised path in our code is a
+fallback we added, and Section~\ref{sec:alternatives} is a comparison the paper
+does not make.
+
+\paragraph{One thing the paper proposes but does not do.}
+Its equation (6) is null-space LDA, and it is explicitly unfinished work:
+\begin{quote}
+``a second method \emph{which we are currently investigating} chooses $W$ to
+maximize the between-class scatter of the projected samples after having first
+reduced the within-class scatter. Taken to an extreme, we can maximize the
+between-class scatter of the projected samples subject to the constraint that
+the within-class scatter is zero''
+\end{quote}
+over ``the set of $n\times m$ matrices with orthonormal columns contained in the
+kernel of $\Sw$''. That is precisely case~(b) of
+Section~\ref{sec:gevp} --- a singular $B$ with no shared null vector, giving
+$J(w)=\infty$. Section~\ref{sec:alternatives} explains it and says why we did
+not implement it either: on Yale that kernel has $d-(N-c)=30774$ dimensions, so
+``zero within-class scatter'' there is mostly an artefact of having too few
+samples. So this is one alternative that neither the paper nor we measured, and
+it should be described that way rather than claimed as a result.
+
+\begin{gotcha}[The paper says ``orthonormal columns'', and strictly it should not]
+The paper states that ``the optimization for $W_{fld}$ is performed over
+$(N-c)\times m$ matrices \textbf{with orthonormal columns}''. But the
+generalised eigenvectors its own equation~(4) defines are
+$\Sw$-orthogonal: they satisfy $W^{\!\top}\Sw W = I$, not $W^{\!\top}W = I$, and
+the two coincide only when $\Sw = I$. The slip is harmless, because $J(W)$ is
+invariant under any nonsingular change of basis
+(Theorem~\ref{thm:invariance}), so rescaling columns changes neither the
+subspace nor the recognition rate. But it is still a slip: if asked ``are
+Fisherfaces orthogonal?'', the answer is \emph{not} ``yes, the paper says
+orthonormal columns.'' They are orthogonal in the $\Sw$ inner product and
+generally not in the Euclidean one --- which our code confirms, measuring
+$\|W^{\!\top}\Sw W - I\|/\sqrt{c-1} = 4.61\times10^{-12}$.
+\end{gotcha}
+
 \section{Solving \texorpdfstring{$\Sb w=\lambda\Sw w$}{Sb w = lambda Sw w} properly}
 \label{sec:solve}
 
-\subsection{The naive route and why we avoid it}
+\subsection{The naive route, and what is actually wrong with it}
+\label{sec:naive}
 
 The obvious move is to multiply by $\Sw^{-1}$ and solve the ordinary eigenproblem
 \[
   \Sw^{-1}\Sb\,w = \lambda w .
 \]
-This is \emph{mathematically} fine but \emph{numerically} poor. The product
+This is mathematically fine. The objection is structural: the product
 $\Sw^{-1}\Sb$ is generally \textbf{not symmetric}, even though $\Sw$ and $\Sb$
-both are: $(\Sw^{-1}\Sb)^{\!\top} = \Sb\Sw^{-1}$, which is not the same matrix. The
-consequences are real:
-\begin{itemize}[nosep]
-\item A general non-symmetric eigensolver is used, which can return
-  \textbf{complex} eigenvalues from pure round-off, even though the true ones are
-  real and non-negative.
-\item The eigenvectors are not guaranteed orthogonal in any inner product.
-\item It explicitly forms $\Sw^{-1}$, which, given $\kappa\approx10^{11}$, is the
-  worst possible thing to do.
-\end{itemize}
+both are, because
+\[
+  (\Sw^{-1}\Sb)^{\!\top} \;=\; \Sb^{\!\top}\Sw^{-\top} \;=\; \Sb\,\Sw^{-1},
+\]
+and $\Sb\Sw^{-1} \neq \Sw^{-1}\Sb$ unless the two matrices happen to commute.
+So MATLAB has to call a general non-symmetric eigensolver, and three guarantees
+are lost: eigenvalues may come back complex from pure round-off even though the
+true ones are real and non-negative; the eigenvectors are not orthogonal in
+\emph{any} inner product; and we have formed $\Sw^{-1}$ explicitly, with
+$\kappa(\Sw)\approx 10^{11}$.
+
+\paragraph{But how bad is it \emph{here}? Measured: not bad at all.}
+It would be dishonest to leave the above as the answer, because we ran it.
+Route~1 of Section~\ref{sec:routes} is exactly this naive computation, and on
+the harder of our two problems --- Yale with $m=1482$ and
+$\kappa(\Sw)=4.19\times10^{11}$ --- it gives:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+route & rate & $\max|\operatorname{Im}\lambda|$ & angle vs.\ Cholesky \\
+\midrule
+1. $\mathtt{inv(Sw)*Sb}$, then \texttt{eig} & 95.5\% & $8.43\times10^{-9}$ & $0.00^\circ$ \\
+3. Cholesky whitening (ours)                & 95.5\% & $0$                 & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The imaginary parts are at round-off, the recovered subspace agrees with the
+Cholesky one to $0.00^\circ$, and the recognition rate is \emph{identical}. The
+same holds on ORL. \textbf{The naive route is not wrong for our data.} Anyone claiming
+otherwise is reciting a rule instead of reporting a measurement.
+
+\paragraph{Why it survives, mechanically.} This is the part worth understanding,
+because it tells us when the naive route \emph{would} fail. Eigenvector accuracy
+in a non-symmetric problem degrades as the \emph{gap} between an eigenvalue and
+its neighbours shrinks relative to the size of the matrix. Our wanted
+eigenvalues are not crowded --- from Section~\ref{sec:gevp} the top three on
+ORL are $1.49\times10^{7}$, $7.15\times10^{4}$, $1.81\times10^{4}$, each
+separated from the next by orders of magnitude, and everything past
+$l=c-1$ sits at $10^{-12}$. We only ever keep the top $c-1$, i.e.\ the
+best-separated end of the spectrum. The ill-conditioning of $\Sw$ does inject
+error, but it lands in the directions we throw away.
+
+\paragraph{So why do we still not use it?} Three reasons, in order of honesty.
+
+\begin{enumerate}[nosep]
+\item \textbf{It has no guarantee, it just happened to work.} The bound on the
+  non-symmetric solver's error involves $\kappa(\Sw)$; we got a good answer
+  because the spectrum is favourably spread, not because the method promised
+  one. Change $m$, the dataset, or the number of images per class and the gaps
+  close. The symmetric route's accuracy does not depend on that luck.
+\item \textbf{The output needs cleaning up, and the theory no longer applies to
+  what you computed.} You must call \texttt{real()} on the eigenvalues, re-sort,
+  and accept eigenvectors that satisfy no orthogonality relation. In particular
+  the simultaneous-diagonalisation theorem (Theorem~\ref{thm:simdiag}) says the
+  true $W$ satisfies $W^{\!\top}\Sw W = I$; the vectors route~1 returns satisfy
+  that only up to whatever the solver did. We lose the ability to \emph{check}
+  our own answer.
+\item \textbf{It is the slowest route.} Measured on Yale: $2.68$\,s versus
+  $1.01$\,s for Cholesky. Quote the \emph{ratio}, not the seconds --- across
+  three runs of the script the absolute times moved by nearly $3\times$
+  ($0.93$, $2.16$, $2.68$\,s for route~1) because the machine was not otherwise
+  idle, while the ratio stayed put at $2.58$, $2.81$, $2.65$. A single
+  wall-clock number is not a reproducible measurement; a ratio measured inside
+  one run largely is. Forming $\Sw^{-1}$
+  ($\sim m^3$ work) and then running a non-symmetric QR iteration is strictly
+  more arithmetic than one Cholesky factorisation plus a symmetric
+  tridiagonal eigensolve.
+\end{enumerate}
+
+\paragraph{The viva answer, in one sentence.} ``The naive route gave bit-for-bit
+the same recognition rate and the same subspace to $0.00^\circ$ on both
+datasets, so it is not wrong here; we use Cholesky whitening because it is
+$2.7\times$ faster, needs no post-processing, and its accuracy does not depend
+on the eigenvalue gaps happening to be large.''
 
 \subsection{Cholesky whitening: the route we use}
 
@@ -1467,6 +1630,76 @@ for which:
 Having found $z$, recover $w = R^{-1}z$, i.e.\ solve $Rw=z$ (cheap: $R$ is
 triangular). Note the eigen\emph{values} $\lambda$ are unchanged by the
 substitution, so they are still exactly the Fisher criterion values.
+
+\paragraph{Upper or lower triangular? Either --- they are the same factorisation.}
+Many textbooks write Cholesky as $\Sw = LL^{\!\top}$ with $L$ \emph{lower}
+triangular, and that is an equally valid starting point. The two conventions are
+related by one transpose: if $\Sw = R^{\!\top}R$ with $R$ upper triangular, then
+$L := R^{\!\top}$ is lower triangular and
+\[
+  LL^{\!\top} \;=\; R^{\!\top}\!\left(R^{\!\top}\right)^{\!\top} \;=\; R^{\!\top}R \;=\; \Sw ,
+\]
+so $L$ is \emph{the same numbers}, just stored as the transpose. Running the
+derivation in the lower-triangular convention, substitute $w = L^{-\top}z$ into
+$\Sb w = \lambda \Sw w$:
+\[
+  \Sb L^{-\top} z \;=\; \lambda\, LL^{\!\top}L^{-\top} z \;=\; \lambda\, L z ,
+\]
+then multiply on the left by $L^{-1}$:
+\[
+  \underbrace{L^{-1}\Sb L^{-\top}}_{=:\,M_L} z \;=\; \lambda z ,
+\]
+and $M_L$ is symmetric by the same one-line argument:
+$M_L^{\!\top} = (L^{-1}\Sb L^{-\top})^{\!\top} = L^{-1}\Sb^{\!\top}L^{-\top} = M_L$.
+Substituting $L = R^{\!\top}$ gives
+$M_L = R^{-\top}\Sb R^{-1} = M$ --- \textbf{literally the same matrix}, so the
+same eigenvalues and the same $\lambda_l = J(w_l)$. The only thing that changes
+is the recovery step: upper gives $w = R^{-1}z$ (solve $Rw=z$), lower gives
+$w = L^{-\top}z$ (solve $L^{\!\top}w = z$), and those are the same linear system
+written twice.
+
+\paragraph{Measured, not asserted.} Section S12(f) of the script runs both
+conventions on the real ORL scatter matrices ($m=160$) and compares them:
+\begin{center}
+\begin{tabular}{lr}
+\toprule
+quantity & value \\
+\midrule
+$\|L - R^{\!\top}\| / \|R\|$                                   & $5.44\times10^{-14}$ \\
+$\|M_{\mathrm{up}} - M_{\mathrm{lo}}\| / \|M_{\mathrm{up}}\|$  & $5.86\times10^{-11}$ \\
+$\max|\lambda_{\mathrm{up}} - \lambda_{\mathrm{lo}}| / \lambda_1$ & $5.85\times10^{-11}$ \\
+worst $|\cos|$ over the $31$ Fisherface pairs                  & $1.00000000$ \\
+$\|W^{\!\top}\Sw W - I\| / \sqrt{c-1}$                         & $4.61\times10^{-12}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+Every difference is round-off and the directions are identical to eight decimal
+places. Note that all of these are \emph{relative} figures. That matters here:
+$\Sb$ has entries of order $10^{7}$ on this data, so the raw
+$\|M_{\mathrm{up}} - M_{\mathrm{lo}}\|$ is $8.8\times10^{-4}$, which looks
+alarming and means nothing until divided by $\|M\| = \lambda_1 = 1.49\times10^{7}$.
+An absolute residual is uninterpretable without the scale of the thing it is a
+residual of.
+
+So the choice is bookkeeping, not mathematics. We use the upper-triangular form
+purely because that is what MATLAB's \texttt{chol} returns by default:
+\texttt{R = chol(Sw)} satisfies \texttt{R'*R == Sw}. The lower factor is
+available as \texttt{L = chol(Sw,'lower')}, satisfying \texttt{L*L' == Sw}, and
+our whitening line
+\begin{center}\verb|Minner = (R') \ (Sb / R);|\end{center}
+would become \verb|Minner = L \ (Sb / L');| with no other
+change. Both read ``solve against the triangular factor on both sides'' --- and
+note that in \emph{neither} version do we ever form an inverse; both are
+triangular solves, which is the whole point.
+
+\paragraph{Why it is unique at all.} Worth knowing, because it is the reason the
+word ``the'' is justified above: for a symmetric positive-definite $\Sw$, the
+factorisation $\Sw = R^{\!\top}R$ with $R$ upper triangular and
+\emph{positive diagonal} is unique. Without the positive-diagonal condition you
+could flip the sign of any row of $R$ and still have a valid factor, which would
+flip the sign of the corresponding Fisherface --- harmless, since
+the gotcha on eigenvector signs in Section~\ref{sec:scaling} applies and
+the classifier uses distances.
 
 \paragraph{The name.} Setting $\tilde x = R^{-\top}x$ transforms the data so that
 the within-class scatter becomes the identity: the scatter of the transformed data
@@ -2837,6 +3070,28 @@ Its second output \texttt{p} is non-zero. We add a ridge
 $\varepsilon = 10^{-6}\tr(\Sw)/m$ and retry, and we log that it happened. The
 scaling by $\tr(\Sw)/m$ (the mean eigenvalue) makes $\varepsilon$ comparable to
 $\Sw$'s own magnitude, which a bare constant would not be.
+
+\item[Is the naive $\Sw^{-1}\Sb$ route actually bad on \emph{your} data?]
+No, and we measured rather than assumed. On Yale at $\kappa(\Sw)=4.19\times10^{11}$
+it returns the same $95.5\%$, a subspace agreeing with Cholesky to $0.00^\circ$,
+and imaginary parts of only $8.4\times10^{-9}$. It survives because we keep only
+the top $c-1$ eigenvalues, which are separated by orders of magnitude
+($1.49\times10^{7}$, $7.15\times10^{4}$, $1.81\times10^{4}$), and eigenvector
+error grows as those gaps close. We still prefer Cholesky for three reasons that
+are not about accuracy here: it is about $2.7\times$ faster (ratio stable over
+three runs at $2.58$--$2.81$, though the absolute seconds are not),
+it needs no \texttt{real()}/re-sort cleanup, and its correctness does not depend
+on the gaps being large. (Section~\ref{sec:naive})
+
+\item[Could you use the lower-triangular Cholesky $\Sw=LL^{\!\top}$ instead?]
+Yes, and it gives the \emph{identical} matrix. With $L=R^{\!\top}$ and the
+substitution $w=L^{-\top}z$ you get $L^{-1}\Sb L^{-\top}z = \lambda z$, and
+$L^{-1}\Sb L^{-\top} = R^{-\top}\Sb R^{-1}$, so same eigenvalues, same
+Fisherfaces. The choice is purely which form the library hands you: MATLAB's
+\texttt{chol(Sw)} returns the upper factor $R$ with \texttt{R'*R == Sw}, so the
+code is written that way; \texttt{chol(Sw,'lower')} would work with one line
+changed. Both are triangular solves --- neither forms an inverse.
+(Section~\ref{sec:solve})
 
 \item[Why report Eigenfaces at $k=c-1$ as well as at its best $k$?]
 Fisherfaces always uses exactly $c-1$ features. Comparing it against Eigenfaces
