@@ -79,7 +79,7 @@
   ORL: wrote 3 figures
   Yale: wrote 3 figures
 
-  figures written to figs_simple/
+  figures written to /Users/sksingh/Documents/MVC/hw3/fisherfaces_project/figs_simple/
 
 =====================================================
   DONE

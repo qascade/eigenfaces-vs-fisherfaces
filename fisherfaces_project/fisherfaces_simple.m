@@ -186,14 +186,13 @@ for p = 1:32
     orlFolders{p} = [orlRoot 's' num2str(p) '/'];
 end
 
-% Yale: we must list the directory, because yaleB14 is missing, so the names
-% are not a contiguous numeric range.
-dy = dir(yaleRoot);
-yaleFolders = {};
-for i = 1:numel(dy)
-    if dy(i).isdir && dy(i).name(1) ~= '.'      % skip '.', '..', hidden
-        yaleFolders{end+1} = [yaleRoot dy(i).name '/'];   %#ok<SAGROW>
-    end
+% Yale: same loop.  The folders were originally called yaleB01..yaleB39 with
+% yaleB14 missing, which is not a countable range, so we renamed them to
+% s1..s38 with rename_yale.sh.  The labels were always the loop index and
+% never the folder name, so renaming does not change any result.
+yaleFolders = cell(1, 38);
+for p = 1:38
+    yaleFolders{p} = [yaleRoot 's' num2str(p) '/'];
 end
 
 % Describe the two databases as a STRUCT ARRAY rather than a cell table.

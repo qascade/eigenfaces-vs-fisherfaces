@@ -29,12 +29,34 @@ close all;
 %  quote stable numbers in the report.
 %% ====================================================================
 
-orlRoot  = '../ORL/';
-yaleRoot = '../CroppedYale/';
-figDir   = 'figs/';
+% Resolve the data paths relative to THIS FILE, not to whatever folder the
+% user happens to be sitting in.  mfilename('fullpath') gives the full path
+% of the running script without its extension; fileparts peels the directory
+% off it.  Without this the script only works when the current folder is the
+% project folder -- and it fails SILENTLY, because dir() on a non-existent
+% folder returns an empty list rather than an error, so the loaders would
+% return zero images and the first PCA would die with a confusing
+% "Index in position 2 exceeds array bounds" instead of saying what is wrong.
+thisDir = fileparts(mfilename('fullpath'));
+if isempty(thisDir)                       % pasted into the command window
+    thisDir = pwd;
+end
+orlRoot  = fullfile(thisDir, '..', 'ORL', filesep);
+yaleRoot = fullfile(thisDir, '..', 'CroppedYale', filesep);
+figDir   = fullfile(thisDir, 'figs', filesep);
 
 if exist(figDir, 'dir') == 0
     mkdir(figDir);
+end
+
+% Fail loudly and early if the databases are not where we expect them.
+if exist(orlRoot, 'dir') == 0
+    error(['Cannot find the ORL database at %s\n' ...
+           'Expected it one level above this script.'], orlRoot);
+end
+if exist(yaleRoot, 'dir') == 0
+    error(['Cannot find the CroppedYale database at %s\n' ...
+           'Expected it one level above this script.'], yaleRoot);
 end
 
 rng(0);
@@ -249,17 +271,14 @@ for p = 1:40
 end
 orlFolders32 = orlFolders40(1:32);          % the 32 subjects HW3 used
 
-% For Yale we must list the directory, because yaleB14 does not exist and so
-% the names are not a contiguous numeric range.  dir returns entries in
-% alphabetical order, and for these names alphabetical order equals numeric
-% order ('yaleB01' < 'yaleB02' < ... < 'yaleB39').
-dy = dir(yaleRoot);
-yaleFolders = {};
-for i = 1:numel(dy)
-    % keep real sub-directories only: skip '.', '..' and any hidden entry
-    if dy(i).isdir && dy(i).name(1) ~= '.'
-        yaleFolders{end+1} = [yaleRoot dy(i).name '/'];   %#ok<SAGROW>
-    end
+% Yale is built the same way.  The folders ship as yaleB01..yaleB39 with
+% yaleB14 absent, which is not a countable range, so rename_yale.sh renames
+% them to s1..s38 once.  That is safe: the class label is the loop index p
+% below, never the folder name, and alphabetical yaleB order maps to s1..s38
+% in the same order, so every image keeps the class it had before.
+yaleFolders = cell(1, 38);
+for p = 1:38
+    yaleFolders{p} = [yaleRoot 's' num2str(p) '/'];
 end
 fprintf('\n--- S2: datasets found ---\n');
 fprintf('  ORL subjects  : %d\n', numel(orlFolders40));
@@ -1180,6 +1199,12 @@ nTestTot  = 0;
 for p = 1:nF
     f  = dir([folders{p} '*.pgm']);
     nf = numel(f);
+    if nf == 0
+        % dir() on a missing or empty folder returns an empty struct, NOT an
+        % error.  Without this the script would run on zero images and fail
+        % much later with an unrelated-looking indexing error.
+        error('loadFaces: no .pgm images found in %s', folders{p});
+    end
     ntr = min(numTrain, nf);              % a subject may have fewer images
     nTrainTot = nTrainTot + ntr;
     nTestTot  = nTestTot  + (nf - ntr);
