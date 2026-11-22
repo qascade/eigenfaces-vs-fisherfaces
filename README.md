@@ -70,6 +70,11 @@ fisherfaces_project/
   run_log_simple.txt      its output
   figs_simple/            its 6 figures
 
+  fisherfaces_experiments.m  five extra experiments, continues the simple file
+  run_log_experiments.txt    its output
+  figs_experiments/          its 6 figures
+  rename_yale.sh             one-time folder rename (see below); --undo reverses it
+
   fisherfaces_project.m   the full study: 15 sections + 9 local functions
   study_guide.pdf         53-page guide: derivations, theorems, gotchas, Q&A bank
   study_guide.tex         LaTeX source
