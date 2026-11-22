@@ -1009,6 +1009,7 @@ vector. Two correct implementations can return visibly different Fisherface
 different from the paper's'' is not evidence of a bug.
 
 \section{The rank theorems: why there are at most \texorpdfstring{$c-1$}{c-1} Fisherfaces}
+\label{sec:rankthms}
 
 \begin{theorem}\label{thm:rankSb}
 $\rank(\Sb)\le c-1$.
@@ -1025,7 +1026,7 @@ linear dependence spans a space of dimension at most $c-1$. Hence
 $\rank(\Sb)\le c-1$.
 \end{proof}
 
-\begin{corollary}[The hard ceiling]
+\begin{corollary}[The hard ceiling]\label{cor:ceiling}
 Since $\Sb w=\lambda\Sw w$ forces $\lambda=0$ whenever $w$ lies in the null space of
 $\Sb$, at most $c-1$ generalised eigenvalues are non-zero. \textbf{There are at
 most $c-1$ useful Fisherfaces, however many pixels or training images we have.}

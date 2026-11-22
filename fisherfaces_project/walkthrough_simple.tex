@@ -810,6 +810,67 @@ The rank bound itself is easy to see: class $j$ contributes $n_j$ vectors
 $x - \mu_j$ that are forced to sum to zero, so it supplies at most $n_j - 1$
 independent directions, and $\sum_j (n_j - 1) = N - c$.
 
+\paragraph{The three rank results this code depends on.} These are proved in
+Section~\ref{sec:rankthms}. They are worth knowing as a group, because between
+them they decide the shape of everything below: how big $m$ may be, how many
+Fisherfaces come out, and why ORL is the hard database.
+
+\begin{center}
+\small
+\begin{tabular}{llll}
+\toprule
+ & statement & what it controls & measured \\
+\midrule
+Thm~\ref{thm:rankSb}  & $\rank(\Sb)\le c-1$ & how many directions carry
+  & ORL: $31$, bound $31$ \\
+ & & any class information & (tight) \\[3pt]
+Cor~\ref{cor:ceiling} & at most $c-1$ Fisherfaces & the width of \texttt{Wopt}
+  & ORL $31$, Yale $37$ \\[3pt]
+Thm~\ref{thm:rankSw}  & $\rank(\Sw)\le N-c$ & the largest usable $m$
+  & Yale: $1482$, bound $1482$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{observation}[What each one looks like in the output]
+\emph{Theorem~\ref{thm:rankSb} is tight, and the bound appears as a cliff rather
+than a decay.} On ORL the generalised eigenvalues run
+$\lambda_{1} = 1.49\times10^{7}$ down to $\lambda_{31} = 7.47$, and then
+$\lambda_{32} = 2.1\times10^{-12}$ --- twelve orders of magnitude between two
+consecutive eigenvalues, exactly at the predicted index. Check~(b) in the
+script confirms $\rank(\Sb) = 31$ with $c = 32$.
+
+\emph{Corollary~\ref{cor:ceiling} is why \texttt{Z(:, 1:(c-1))} is not a tuning
+choice.} Keeping more columns cannot help: past $c-1$ the eigenvalues are zero
+and their eigenvectors are an arbitrary basis of a null space. This also makes
+the fair comparison against eigenfaces obvious --- Fisherfaces get exactly
+$c-1$ features, so the script reports eigenfaces at $k = c-1$ as well as at
+their best $k$.
+
+\emph{Theorem~\ref{thm:rankSw} is the one that predicts the headline result.}
+Read it as degrees of freedom: each person donates only $n_j - 1$ directions to
+$\Sw$. ORL gives $6$ training images per person, so $\mathbf{5}$; Yale gives
+$40$, so $\mathbf{39}$. $\Sw$ is our estimate of ``how one person's images
+vary'', and on ORL it is built from five directions per person. That single
+number is why Fisherfaces \emph{lose} on ORL ($90.6\%$ against eigenfaces'
+$95.3\%$) and win on Yale ($67.2\%$ against $34.2\%$).
+\end{observation}
+
+\begin{gotcha}[A rank one short of the bound is a fact about your data]
+$N-c$ is an \emph{upper} bound, and real data can fall short of it. On our
+first Yale run the measured $\rank(\Sw)$ was $1481$, not $1482$. A deficiency
+beyond the predicted one means some class contains an \emph{exact} linear
+dependency, and the simplest cause is a repeated image. A duplicate search
+found one pair in subject 12: a stray file
+\texttt{yaleB12\_P00A+020E+10 - Copy.pgm}, byte-identical to the original. Two
+identical columns stay identical after within-class centring, so they cost
+exactly one unit of rank: $1482 - 1 = 1481$, which is what we measured. After
+deleting it the rank meets the bound exactly.
+
+The lesson generalises: a rank that disagrees with theory by a small amount is
+usually telling you something true about the data, not about the algorithm.
+\end{gotcha}
+
 \paragraph{The syntax.}
 \begin{description}[leftmargin=*,style=nextline,nosep]
 \item[\texttt{Al(:, y == j)}] \textbf{Logical indexing again, now selecting
@@ -953,9 +1014,12 @@ definition of $\mu_j$, leaving $\Sw + \Sb$. Measured: $5.5\times10^{-16}$ on
 ORL. A wrong class mean or a miscounted $n_j$ would break it immediately, so it
 is a free correctness test on the whole scatter construction.
 
-\paragraph{Check (b): $\rank(\Sb) = c-1$.} Measured $31$ with $c = 32$, and we
-keep exactly $31$ Fisherfaces. This confirms the bound is tight, not merely an
-inequality.
+\paragraph{Check (b): $\rank(\Sb) = c-1$.} This is
+Theorem~\ref{thm:rankSb} and Corollary~\ref{cor:ceiling} being tested at
+runtime. Measured $31$ with $c = 32$, and we keep exactly $31$ Fisherfaces, so
+the bound is tight here rather than merely an inequality. Were it to come out
+\emph{below} $c-1$, that would not be a bug in the solver but a statement about
+the data --- two class means coinciding, or a class with a single image.
 
 \paragraph{Check (c): $\Sw$-orthogonality.} Fisherfaces are orthogonal in the
 inner product $\langle u,v\rangle_{\Sw} = u^{\!\top}\Sw v$, \textbf{not} in the
