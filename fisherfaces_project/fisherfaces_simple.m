@@ -34,11 +34,30 @@
 clear; clc;
 rng(0);                       % fixed seed => the numbers below are repeatable
 
-orlRoot  = '../ORL/';
-yaleRoot = '../CroppedYale/';
-figDir   = 'figs_simple/';
+% Resolve the data paths relative to THIS FILE, not to whatever folder the
+% user happens to be sitting in.  mfilename('fullpath') gives the full path
+% of the running script without its extension; fileparts peels off the
+% directory.  Without this the script only works when the current folder is
+% the project folder -- and it would fail SILENTLY, because dir() on a
+% non-existent folder returns an empty list rather than an error, so every
+% loop below would simply do nothing and we would "classify" zero images.
+thisDir  = fileparts(mfilename('fullpath'));
+if isempty(thisDir)                       % pasted into the command window
+    thisDir = pwd;
+end
+orlRoot  = fullfile(thisDir, '..', 'ORL', filesep);
+yaleRoot = fullfile(thisDir, '..', 'CroppedYale', filesep);
+figDir   = fullfile(thisDir, 'figs_simple', filesep);
 if exist(figDir, 'dir') == 0
     mkdir(figDir);
+end
+
+% Fail loudly and early if the databases are not where we expect.
+if exist(orlRoot, 'dir') == 0
+    error('Cannot find ORL at %s', orlRoot);
+end
+if exist(yaleRoot, 'dir') == 0
+    error('Cannot find CroppedYale at %s', yaleRoot);
 end
 
 % Newer MATLAB may pick a dark figure theme, which prints badly.  Force light.
@@ -433,7 +452,13 @@ nF = numel(folders);
 nTr = 0;
 nTe = 0;
 for p = 1:nF
-    f   = dir([folders{p} '*.pgm']);
+    f = dir([folders{p} '*.pgm']);
+    if isempty(f)
+        % dir() on a missing or empty folder returns an empty struct, NOT an
+        % error.  Without this check the whole script would run to completion
+        % on zero images and print meaningless rates.
+        error('No .pgm images found in %s', folders{p});
+    end
     ntr = min(numTrain, numel(f));       % a person may have fewer images
     nTr = nTr + ntr;
     nTe = nTe + (numel(f) - ntr);
