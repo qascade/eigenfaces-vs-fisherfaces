@@ -1,0 +1,86 @@
+=====================================================
+  PART 1: toy 2-D problem, PCA vs Fisher
+=====================================================
+
+  Fisher direction : (0.0045, -1.0000)   <- almost exactly the y-axis
+  PCA    direction : (-0.9998, -0.0187)   <- almost exactly the x-axis
+  J(w_Fisher) = 4.240418
+  J(w_PCA)    = 0.002105
+  ratio       = 2014.3x  (Fisher separates; PCA does not)
+
+  error along Fisher direction = 2.00%
+  error along PCA    direction = 48.30%  (near chance: 50%)
+  Mahalanobis separation Delta = 4.0000
+  best possible (Bayes) error   = 2.28%
+  NOTE: the measured 2.00% can land slightly BELOW 2.28% -- that is
+        sampling noise on 1000 points, not a contradiction.
+
+
+=====================================================
+  PART 2: eigenfaces vs Fisherfaces on real faces
+=====================================================
+
+-----------------------------------------------------
+  ORL
+-----------------------------------------------------
+  d = 10304 pixels, N = 192 training, 128 test, c = 32 people
+
+  1. correlation (raw pixels)      : 91.4%
+  2. eigenfaces, best k = 50       : 95.3%
+  3. eigenfaces at k = c-1 = 31    : 94.5%
+  4. FISHERFACES (31 features)     : 90.6%
+
+  checks:
+    (a) ||S_T - (S_B+S_W)|| / ||S_T|| = 5.517e-16   (should be ~1e-16)
+    (b) rank(S_B) = 31, bound c-1 = 31, we kept 31
+    (c) off-diagonal share of W'*W     (Euclidean) = 4.986e-01
+        off-diagonal share of W'*S_W*W (S_W-inner)  = 3.787e-13
+        => S_W-orthogonal, not Euclidean-orthogonal
+
+-----------------------------------------------------
+  Yale
+-----------------------------------------------------
+  d = 32256 pixels, N = 1520 training, 894 test, c = 38 people
+
+  1. correlation (raw pixels)      : 43.0%
+  2. eigenfaces, best k = 170      : 34.2%
+  3. eigenfaces at k = c-1 = 37    : 29.5%
+  4. FISHERFACES (37 features)     : 67.2%
+
+  checks:
+    (a) ||S_T - (S_B+S_W)|| / ||S_T|| = 4.754e-16   (should be ~1e-16)
+    (b) rank(S_B) = 37, bound c-1 = 37, we kept 37
+    (c) off-diagonal share of W'*W     (Euclidean) = 4.123e-01
+        off-diagonal share of W'*S_W*W (S_W-inner)  = 3.109e-12
+        => S_W-orthogonal, not Euclidean-orthogonal
+
+
+================ SUMMARY (recognition rate %) ================
+  database    correlation   eig(best)   eig(c-1)   FISHERFACES
+  ORL              91.4        95.3       94.5          90.6
+  Yale             43.0        34.2       29.5          67.2
+==============================================================
+
+  Read it like this:
+   - On Yale (illumination only) Fisherfaces win by a wide margin.
+     That is the paper's claim, reproduced.
+   - On ORL (pose and expression) Fisherfaces LOSE to eigenfaces.
+     Reason: ORL gives 6 training images per person, so each class
+     contributes only n_j - 1 = 5 degrees of freedom to S_W.  Yale
+     gives 40, so 39.  S_W is far better estimated on Yale, and
+     Fisherfaces depend on inverting it.
+   - On Yale, plain correlation BEATS eigenfaces.  PCA actively
+     hurts there, because its leading components encode lighting.
+
+
+=====================================================
+  PART 3: figures
+=====================================================
+  ORL: wrote 3 figures
+  Yale: wrote 3 figures
+
+  figures written to figs_simple/
+
+=====================================================
+  DONE
+=====================================================

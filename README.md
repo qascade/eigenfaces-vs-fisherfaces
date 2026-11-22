@@ -66,12 +66,16 @@ directions per class and wins comfortably.
 
 ```
 fisherfaces_project/
-  fisherfaces_project.m   one monolithic script: 12 sections + 6 local functions
-  study_guide.pdf         36-page guide: derivations, theorems, gotchas, Q&A bank
+  fisherfaces_simple.m    START HERE: the short version, 313 lines of code
+  run_log_simple.txt      its output
+  figs_simple/            its 6 figures
+
+  fisherfaces_project.m   the full study: 15 sections + 9 local functions
+  study_guide.pdf         53-page guide: derivations, theorems, gotchas, Q&A bank
   study_guide.tex         LaTeX source
   CODE_WALKTHROUGH.md     line-by-line: what each line does and what breaks without it
   run_log.txt             the run every number quoted above comes from
-  figs/                   9 generated figures
+  figs/                   10 generated figures
 q1_matlab/
   q1_face_pca.m           the HW3 PCA baseline this project builds on
   run_log.txt             its output, reproduced exactly by section S3/S4
@@ -116,9 +120,27 @@ Then:
 
 ```bash
 cd fisherfaces_project
+matlab -batch "run('fisherfaces_simple.m')"      # ~3 minutes, writes run_log_simple.txt and figs_simple/
 matlab -batch "run('fisherfaces_project.m')"     # ~8 minutes, writes run_log.txt and figs/
 pdflatex study_guide.tex && pdflatex study_guide.tex
 ```
+
+### Which script to read
+
+`fisherfaces_simple.m` is the one to read first. It is self-contained and has
+three parts: a 2-D toy problem showing why PCA is not a classifier, then
+eigenfaces vs Fisherfaces on ORL and Yale, then the figures. It reproduces the
+same recognition rates as the full script:
+
+| | correlation | eig (best k) | eig (k = c-1) | **Fisherfaces** |
+|---|---|---|---|---|
+| ORL  | 91.4% | 95.3% | 94.5% | **90.6%** |
+| Yale | 43.0% | 34.2% | 29.5% | **67.2%** |
+
+`fisherfaces_project.m` adds everything else: the sweeps over `m` and over
+images per subject, six different ways of solving the generalised eigenproblem,
+the alternatives to PCA-then-LDA, a frequency analysis of the two bases, and the
+numerical checks.
 
 The script is deterministic (`rng(0)`): three consecutive runs produced identical
 numbers.

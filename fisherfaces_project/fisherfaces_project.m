@@ -374,13 +374,16 @@ fprintf('  theory: rank(S_W) <= N - c = %d\n', NY - cY);
 fprintf('  measured rank(S_W)         = %d\n', rankSwY);
 fprintf('  so S_W is singular: rank %d << d %d\n', rankSwY, dYALE);
 
-% ---- why the measured rank is 1481 and not the full bound 1482 ----
-% N - c is an UPPER bound.  We lose one more because the dataset on this
-% machine contains a stray duplicated file,
+% ---- does the measured rank actually meet the bound N - c? ----
+% N - c is an UPPER bound, so it is worth checking whether we reach it.
+% We do now (1482 = 1482), but we did NOT at first: the dataset on this
+% machine used to contain a stray duplicated file,
 %     CroppedYale/yaleB12/'yaleB12_P00A+020E+10 - Copy.pgm',
-% which is byte-identical to yaleB12_P00A+020E+10.pgm.  Two identical
-% columns stay identical after within-class centring, so they are an exact
-% linear dependency and cost exactly one more unit of rank.
+% byte-identical to yaleB12_P00A+020E+10.pgm.  Two identical columns stay
+% identical after within-class centring, so they were an exact linear
+% dependency and cost exactly one unit of rank, giving 1481.  Deleting the
+% stray file restored the bound.  This search is kept as a regression test:
+% a rank one short of N - c is a dataset defect, not a theory failure.
 fprintf('\n  Searching the training set for exact duplicate images...\n');
 nDup = 0;
 for i = 1:cY
