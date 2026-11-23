@@ -130,6 +130,14 @@ matlab -batch "run('fisherfaces_project.m')"     # ~8 minutes, writes run_log.tx
 pdflatex study_guide.tex && pdflatex study_guide.tex
 ```
 
+### Where are the figures?
+
+Both scripts **save** their figures as `.png` and do not display them, because
+`matlab -batch` has no display. Look in `fisherfaces_project/figs_simple/` and
+`fisherfaces_project/figs_experiments/` (6 files each). To make the windows
+open instead, set `showFigures = true` near the top of either script and run it
+from the MATLAB desktop rather than with `-batch`.
+
 ### Which script to read
 
 `fisherfaces_simple.m` is the one to read first. It is self-contained and has

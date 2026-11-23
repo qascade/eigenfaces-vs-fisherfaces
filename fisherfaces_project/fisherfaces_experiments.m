@@ -19,6 +19,10 @@
 %  so the duplication is forced as well as convenient.)
 %
 %  Run with:  matlab -batch "run('fisherfaces_experiments.m')"
+%
+%  FIGURES are SAVED to figs_experiments/ as .png -- they do not pop up,
+%  because -batch has no display.  To see them on screen, open MATLAB
+%  normally and set showFigures = true below.
 %  Takes a few minutes, mostly loading Yale.
 % =====================================================================
 
@@ -40,6 +44,22 @@ if exist(orlRoot, 'dir') == 0
 end
 if exist(yaleRoot, 'dir') == 0
     error('Cannot find CroppedYale at %s', yaleRoot);
+end
+
+% ---- do you want the figures to POP UP, or just be saved? ----
+% Figures are always written to figDir as .png.  This flag decides whether
+% they also appear on screen and stay open afterwards.
+%
+%   false : windows are created hidden and closed after saving.  Use this
+%           with  matlab -batch , which has no display at all.
+%   true  : windows open and stay open, so you can look at them.  Use this
+%           from the MATLAB desktop.
+showFigures = false;
+
+if showFigures
+    figVis = 'on';
+else
+    figVis = 'off';
 end
 
 try
@@ -129,7 +149,7 @@ for db = 1:2
     end
 
     % ---- figure: condition number and accuracy, side by side ----
-    figure('Visible', 'off', 'Position', [100 100 900 350]);
+    figure('Visible', figVis, 'Position', [100 100 900 350]);
 
     subplot(1, 2, 1);
     semilogy(ms, conds, '-o', 'LineWidth', 1.5);
@@ -146,7 +166,9 @@ for db = 1:2
     title([name ': accuracy peaks before m = N-c']);
 
     saveas(gcf, [figDir 'E1_cond_vs_m_' name '.png']);
-    close;
+    if ~showFigures
+        close;
+    end
 
     [bestRate, iBest] = max(rates);
     fprintf('   best m = %d at %.1f%%; the paper would use m = %d, giving %.1f%%\n', ...
@@ -201,7 +223,7 @@ fprintf('  the training images that look like it -- and those now carry\n');
 fprintf('  somebody else''s label by construction.  The method works; it has\n');
 fprintf('  just been told the wrong thing, and it is systematically wrong.\n');
 
-figure('Visible', 'off', 'Position', [100 100 560 380]);
+figure('Visible', figVis, 'Position', [100 100 560 380]);
 bar([rEigTrue, rEigPerm; rFishTrue, rFishPerm]);
 hold on;
 plot([0.5 2.5], [chance chance], 'k--', 'LineWidth', 1.2);
@@ -212,7 +234,9 @@ legend({'true labels', 'shuffled labels', 'chance = 100/c'}, 'Location', 'northe
 title('ORL: shuffling the training labels destroys both methods');
 grid on;
 saveas(gcf, [figDir 'E2_label_permutation.png']);
-close;
+if ~showFigures
+    close;
+end
 
 
 %% ====================================================================
@@ -288,7 +312,7 @@ fprintf('   tuning m on the test set would have chosen m = %d for %.1f%%\n', ...
 fprintf('   the gap, %.1f points, is the optimism we avoid by not peeking.\n', ...
         bestTest - rTestCV);
 
-figure('Visible', 'off', 'Position', [100 100 620 400]);
+figure('Visible', figVis, 'Position', [100 100 620 400]);
 plot(msCV, cvRate,   '-o', 'LineWidth', 1.5); hold on;
 plot(msCV, testRate, '-s', 'LineWidth', 1.5);
 plot(mChosen, rTestCV, 'kp', 'MarkerSize', 14, 'MarkerFaceColor', 'y');
@@ -300,7 +324,9 @@ legend({'cross-validated (honest)', 'test set (peeking)', 'm chosen by CV'}, ...
        'Location', 'southwest');
 title('ORL: choosing m with and without looking at the test set');
 saveas(gcf, [figDir 'E3_cross_validation.png']);
-close;
+if ~showFigures
+    close;
+end
 
 
 %% ====================================================================
@@ -375,7 +401,7 @@ else
     fprintf('      argument does not transfer to noise sensitivity.\n');
 end
 
-figure('Visible', 'off', 'Position', [100 100 620 400]);
+figure('Visible', figVis, 'Position', [100 100 620 400]);
 plot(sigmas, rCorrN, '-o', 'LineWidth', 1.5); hold on;
 plot(sigmas, rEigN,  '-s', 'LineWidth', 1.5);
 plot(sigmas, rFishN, '-^', 'LineWidth', 1.5);
@@ -386,7 +412,9 @@ ylabel('recognition rate (%)');
 legend({'correlation', 'eigenfaces (k=50)', 'Fisherfaces'}, 'Location', 'southwest');
 title('ORL: how the three methods degrade under pixel noise');
 saveas(gcf, [figDir 'E4_noise.png']);
-close;
+if ~showFigures
+    close;
+end
 
 
 %% ====================================================================
@@ -481,7 +509,7 @@ if counts(1) == 0
     fprintf('   precisely why the headline Yale numbers look so poor.\n');
 end
 
-figure('Visible', 'off', 'Position', [100 100 640 400]);
+figure('Visible', figVis, 'Position', [100 100 640 400]);
 bar([errEig(:), errFish(:)]);
 set(gca, 'XTickLabel', {'0-12', '13-25', '26-50', '51-77', '>77'});
 xlabel('angle of light source from the optical axis (degrees)');
@@ -490,7 +518,9 @@ legend({'eigenfaces (k=c-1)', 'Fisherfaces'}, 'Location', 'northwest');
 title('Yale: error grows with lighting angle');
 grid on;
 saveas(gcf, [figDir 'E5_illumination_subsets.png']);
-close;
+if ~showFigures
+    close;
+end
 
 fprintf('\n\n=====================================================\n');
 fprintf('  figures written to %s\n', figDir);

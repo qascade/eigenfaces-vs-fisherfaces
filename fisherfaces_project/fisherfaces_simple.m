@@ -29,6 +29,10 @@
 %     S_B/S_W  between-class / within-class scatter
 %
 %  Run with:   matlab -batch "run('fisherfaces_simple.m')"
+%
+%  FIGURES are SAVED to figs_simple/ as .png -- they do not pop up, because
+%  -batch has no display.  To see them on screen, open MATLAB normally and
+%  set showFigures = true below.
 % =====================================================================
 
 clear; clc;
@@ -58,6 +62,22 @@ if exist(orlRoot, 'dir') == 0
 end
 if exist(yaleRoot, 'dir') == 0
     error('Cannot find CroppedYale at %s', yaleRoot);
+end
+
+% ---- do you want the figures to POP UP, or just be saved? ----
+% Figures are always written to figDir as .png.  This flag decides whether
+% they also appear on screen and stay open afterwards.
+%
+%   false : windows are created hidden and closed after saving.  Use this
+%           with  matlab -batch , which has no display at all.
+%   true  : windows open and stay open, so you can look at them.  Use this
+%           from the MATLAB desktop.
+showFigures = false;
+
+if showFigures
+    figVis = 'on';
+else
+    figVis = 'off';
 end
 
 % Newer MATLAB may pick a dark figure theme, which prints badly.  Force light.
@@ -356,15 +376,17 @@ for s = 1:2
     K = keep{s};
 
     % ---- the mean face ----
-    figure('Visible', 'off');
+    figure('Visible', figVis);
     imagesc(reshape(K.xbar, K.H, K.W));
     colormap gray; axis image off;
     title([K.name ': mean face']);
     saveas(gcf, [figDir K.name '_meanface.png']);
-    close;
+    if ~showFigures
+        close;
+    end
 
     % ---- top 16 eigenfaces ----
-    figure('Visible', 'off', 'Position', [100 100 700 700]);
+    figure('Visible', figVis, 'Position', [100 100 700 700]);
     for l = 1:16
         subplot(4, 4, l);
         imagesc(reshape(K.V(:, l), K.H, K.W));
@@ -373,11 +395,13 @@ for s = 1:2
     end
     sgtitle([K.name ': top 16 eigenfaces (smooth, face-like)']);
     saveas(gcf, [figDir K.name '_eigenfaces.png']);
-    close;
+    if ~showFigures
+        close;
+    end
 
     % ---- top 16 Fisherfaces ----
     nShow = min(16, K.nf);
-    figure('Visible', 'off', 'Position', [100 100 700 700]);
+    figure('Visible', figVis, 'Position', [100 100 700 700]);
     for l = 1:nShow
         subplot(4, 4, l);
         imagesc(reshape(K.Wopt(:, l), K.H, K.W));
@@ -386,7 +410,9 @@ for s = 1:2
     end
     sgtitle([K.name ': top Fisherfaces (high-frequency, not face-like)']);
     saveas(gcf, [figDir K.name '_fisherfaces.png']);
-    close;
+    if ~showFigures
+        close;
+    end
 
     fprintf('  %s: wrote 3 figures\n', K.name);
 end

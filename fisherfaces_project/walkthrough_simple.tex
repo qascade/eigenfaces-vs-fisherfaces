@@ -1128,7 +1128,14 @@ have negative entries.
   filling column by column --- the inverse of \texttt{v = im(:)}. The element
   count must match exactly.
 \item[\texttt{figure('Visible','off')}] Creates a figure without popping a
-  window, so the script runs headless.
+  window, so the script runs headless. This is why \textbf{nothing appears on
+  screen when you run the script}: the figures are written to
+  \texttt{figs\_simple/} as \texttt{.png} files instead. Three things stack up
+  here --- the window is created hidden, \texttt{close} destroys it right after
+  saving, and \texttt{matlab -batch} has no display at all, so even a visible
+  figure could not be shown. Set \texttt{showFigures = true} at the top of the
+  script and run it from the MATLAB desktop if you want the windows to open and
+  stay open.
 \item[\texttt{imagesc(A)}] Draws a matrix as an image, \emph{scaling} the
   values to use the full colour range. (Plain \texttt{image} would clip
   instead, and eigenfaces have negative entries, so scaling is required.)
