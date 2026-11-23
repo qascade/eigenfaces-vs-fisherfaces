@@ -66,25 +66,37 @@ directions per class and wins comfortably.
 
 ```
 fisherfaces_project/
-  fisherfaces_simple.m    START HERE: the short version, 313 lines of code
-  run_log_simple.txt      its output
-  figs_simple/            its 6 figures
-
-  fisherfaces_experiments.m  five extra experiments, continues the simple file
-  run_log_experiments.txt    its output
-  figs_experiments/          its 6 figures
-  rename_yale.sh             one-time folder rename (see below); --undo reverses it
-
-  fisherfaces_project.m   the full study: 15 sections + 9 local functions
-  study_guide.pdf         53-page guide: derivations, theorems, gotchas, Q&A bank
-  study_guide.tex         LaTeX source
-  CODE_WALKTHROUGH.md     line-by-line: what each line does and what breaks without it
-  run_log.txt             the run every number quoted above comes from
-  figs/                   10 generated figures
+  toy.m                        the 2-D toy problem: why PCA is not a classifier
+  eigenfaces_vs_fisherfaces.m  the main comparison, on ORL and Yale
+  experiments.m                experiments E1 to E7
+  figures/                     everything the three scripts draw
+  report.pdf / report.tex      the 5-page project report
+  study_guide.pdf / .tex       full derivations, theorems and a question bank
+  run_log_*.txt                the output every quoted number comes from
+  orl_glasses_labels.txt       glasses labels for ORL, made by inspection
+  rename_yale.sh               one-time Yale folder rename (--undo reverses it)
+  archive/                     superseded code, kept only for reproducibility
 q1_matlab/
-  q1_face_pca.m           the HW3 PCA baseline this project builds on
-  run_log.txt             its output, reproduced exactly by section S3/S4
+  q1_face_pca.m                the HW3 PCA baseline this project builds on
 ```
+
+The databases are not in this repository. Extended Yale B's terms forbid
+redistributing its images inside a larger publicly distributed database, so
+download both from the original sources:
+[ORL](https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html) and
+[Extended Yale B, cropped](https://datarepo.eng.ucsd.edu/visiondata/iskwak/public_html/ExtYaleDatabase/ExtYaleB.html).
+Put them one level above `fisherfaces_project/`, then run `./rename_yale.sh`
+once.
+
+## Results
+
+| | correlation | eigenfaces (best k) | eigenfaces (k = c-1) | **Fisherfaces** |
+|---|---|---|---|---|
+| ORL (pose, expression) | 91.4% | **95.3%** | 94.5% | 90.6% |
+| Yale (illumination) | 43.0% | 34.2% | 29.5% | **67.2%** |
+
+Fisherfaces win on Yale, which is the paper's claim. They lose on ORL, which
+is a real result and is explained in the report.
 
 ### The study guide
 

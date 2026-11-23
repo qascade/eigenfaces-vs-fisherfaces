@@ -42,10 +42,10 @@ fisherfaces_project/sgtest.*
 datasets_for_viva.zip
 
 # report build artefacts
-fisherfaces_project/saumya_report.aux
-fisherfaces_project/saumya_report.log
-fisherfaces_project/saumya_report.out
-code_and_report.zip
-fisherfaces_project/saumya_report.aux
-fisherfaces_project/saumya_report.log
-fisherfaces_project/saumya_report.out
+fisherfaces_project/report.aux
+fisherfaces_project/report.log
+fisherfaces_project/report.out
+submission.zip
+fisherfaces_project/report.aux
+fisherfaces_project/report.log
+fisherfaces_project/report.out

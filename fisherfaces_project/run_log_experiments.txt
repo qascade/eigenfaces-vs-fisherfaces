@@ -1,108 +1,104 @@
 loading ORL ...
-loading Yale ... (this is the slow one)
-ORL  : N = 192, c = 32, N-c = 160
-Yale : N = 1520, c = 38, N-c = 1482
+loading Yale ... (slow)
 
 
-=== E1: cond(S_W) against m ===
+=== E1: sweeping m (study guide section 24) ===
 
-  ORL  (N = 192, c = 32, so N-c = 160)
-      m     rank(S_W)    cond(S_W)    rate%
-       31        31    6.489e+01      94.5
-       40        40    7.727e+01      93.0
-       60        60    1.753e+02      95.3
-       80        80    3.729e+02      91.4
-      100       100    6.397e+02      91.4
-      120       120    1.688e+03      90.6
-      140       140    5.798e+03      89.1
-      150       150    2.219e+04      91.4
-      155       155    2.380e+05      89.8
-      160       160    7.849e+07      90.6
-   best m = 60 at 95.3%; the paper would use m = 160, giving 90.6%
-   cond(S_W) grows by a factor of 1.210e+06 from m = 31 to m = 160
+  ORL  (N = 192, c = 32, N-c = 160)
+       m   rate%   rank(S_W)    cond(S_W)
+      31    94.5        31    6.49e+01
+      40    93.0        40    7.73e+01
+      60    95.3        60    1.75e+02
+      80    91.4        80    3.73e+02
+     100    91.4       100    6.40e+02
+     120    90.6       120    1.69e+03
+     140    89.1       140    5.80e+03
+     160    90.6       160    7.85e+07
+   best m = 60 at 95.3%; the paper uses m = 160 giving 90.6%
 
-  Yale  (N = 1520, c = 38, so N-c = 1482)
-      m     rank(S_W)    cond(S_W)    rate%
-      100       100    3.621e+03      51.6
-      200       200    1.196e+04      56.3
-      400       400    4.905e+04      65.2
-      700       700    2.420e+05      68.8
-     1000      1000    1.098e+06      69.8
-     1200      1200    3.641e+06      69.4
-     1400      1400    4.168e+07      66.8
-     1450      1450    4.257e+08      68.0
-     1482      1481    6.011e+12      67.2
-   best m = 1000 at 69.8%; the paper would use m = 1482, giving 67.2%
-   cond(S_W) grows by a factor of 1.660e+09 from m = 100 to m = 1482
+  Yale  (N = 1520, c = 38, N-c = 1482)
+       m   rate%   rank(S_W)    cond(S_W)
+      37    52.0        37    7.18e+02
+      60    49.0        60    1.75e+03
+     100    51.6       100    3.62e+03
+     200    56.3       200    1.20e+04
+     400    65.2       400    4.90e+04
+     700    68.8       700    2.42e+05
+    1000    69.8      1000    1.10e+06
+    1200    69.4      1200    3.64e+06
+    1482    67.2      1481    6.01e+12
+   best m = 1000 at 69.8%; the paper uses m = 1482 giving 67.2%
 
 
-=== E2: label permutation sanity check (ORL) ===
-                       true labels   shuffled labels
-  eigenfaces (k=c-1)       94.5%            0.8%
-  Fisherfaces              90.6%            0.0%
-  chance (100/c)            3.1%            3.1%
-
-  Both collapse to chance or below, which is what we want to see:
-  the recognition rates come from the faces, not from the plumbing.
-
-  Why BELOW chance rather than exactly at it?  Because the shuffle
-  is applied to training labels only.  Fisherfaces faithfully learns
-  to separate the shuffled grouping, so a test face is mapped near
-  the training images that look like it -- and those now carry
-  somebody else's label by construction.  The method works; it has
-  just been told the wrong thing, and it is systematically wrong.
+=== E2: label permutation (ORL) ===
+                 true labels   shuffled
+  eigenfaces         94.5%        0.8%
+  Fisherfaces        90.6%        0.0%
+  chance = 100/c      3.1%
+  Both collapse, so the real numbers come from the faces.
 
 
-=== E3: choosing m by cross-validation (ORL) ===
-   m =  31   cross-validated rate =  95.3%
-   m =  40   cross-validated rate =  97.4%
-   m =  60   cross-validated rate =  96.9%
-   m =  80   cross-validated rate =  97.4%
-   m = 100   cross-validated rate =  97.4%
-   m = 120   cross-validated rate =  96.9%
+=== E3: cross-validated m (ORL) ===
+   m =  31   cross-validated =  95.3%
+   m =  40   cross-validated =  97.4%
+   m =  60   cross-validated =  96.9%
+   m =  80   cross-validated =  97.4%
+   m = 100   cross-validated =  97.4%
+   m = 120   cross-validated =  96.9%
 
-   cross-validation chose m = 40, which scores 93.0% on test
-   tuning m on the test set would have chosen m = 60 for 95.3%
-   the gap, 2.3 points, is the optimism we avoid by not peeking.
+   CV picks m = 40, which scores 93.0% on the test set
+   tuning on test would pick m = 60 for 95.3%
+   the 2.3 point gap is the optimism avoided by not peeking
 
 
 === E4: noise robustness (ORL) ===
-   sigma   correlation   eigenfaces(k=50)   Fisherfaces
-       0        91.4%             95.3%         90.6%
-      20        92.2%             94.5%         89.8%
-      40        92.2%             94.5%         89.8%
-      80        93.0%             94.5%         89.1%
-     160        89.1%             93.0%         81.2%
-     320        85.2%             89.1%         60.9%
-     640        58.6%             74.2%         30.5%
-
-   (one test image = 0.78 points, so smaller gaps are not real)
-   drop from sigma = 0 to sigma = 640:
-     correlation  32.8 points,  eigenfaces  21.1 points,  Fisherfaces  60.2 points
-   => Fisherfaces fall further, as the frequency argument predicts.
+   sigma   eigenfaces   Fisherfaces
+       0        94.5%        90.6%
+      20        94.5%        89.8%
+      40        94.5%        89.8%
+      80        93.8%        89.1%
+     160        93.0%        81.2%
+     320        89.1%        60.9%
+     640        72.7%        30.5%
+   drop from sigma 0 to 640: eigenfaces 21.9 points, Fisherfaces 60.2
+   Nothing moves below sigma = 160: projection is a strong denoiser,
+   so the effect only appears far beyond realistic noise levels.
 
 
-=== E5: Yale error against lighting angle ===
-   subset   angle range     images   eigenfaces err   Fisherfaces err
-     1        0 -  12 deg         0      (no test images)
-     2       12 -  25 deg       104           1.0%             0.0%
-     3       25 -  50 deg       152          30.9%             2.0%
-     4       50 -  77 deg       300          88.3%            22.0%
-     5       77 - 180 deg       338          93.8%            66.3%
-
-   Error climbs with angle for both methods, and the gap between
-   them WIDENS: that is the paper's central claim, that Fisherfaces
-   hold up where illumination gets extreme.
-
-   Subset 1 (0-12 deg) is EMPTY, and that is not a bug: it is the
-   split bias showing up again.  dir sorts names as text and '+'
-   sorts before '-', so the first 40 files per subject -- the
-   training set -- swallow all the near-frontal lighting.  Every
-   test image is therefore at least 12 degrees off axis, which is
-   precisely why the headline Yale numbers look so poor.
+=== E5: error against lighting angle (Yale) ===
+   bin   angle          images   eigenfaces   Fisherfaces
+    1      0- 12 deg         0    (no test images)
+    2     12- 25 deg       104         1.0%         0.0%
+    3     25- 50 deg       152        30.9%         2.0%
+    4     50- 77 deg       300        88.3%        22.0%
+    5     77-180 deg       338        93.8%        66.3%
+   The first bin is EMPTY because dir sorts names as text and
+   '+' sorts before '-', so the training set swallowed all the
+   frontal lighting.  Every test image is at least 12 deg off axis.
 
 
-=====================================================
-  figures written to /Users/sksingh/Documents/MVC/hw3/fisherfaces_project/figs_experiments/
-  DONE
-=====================================================
+=== E6: sweeping the number of classes (ORL) ===
+       c     N   N-c   fisherfaces   eigenfaces   Fisherfaces
+       2    12    10             1       100.0%       100.0%
+       4    24    20             3        81.2%       100.0%
+       8    48    40             7        87.5%       100.0%
+      16    96    80            15        96.9%        93.8%
+      32   192   160            31        94.5%        90.6%
+   The number of Fisherfaces equals c-1 on every row.
+
+
+=== E7: glasses vs no glasses (ORL) ===
+   117 of 400 images wear glasses (29.2%)
+   balanced subset: 234 images, 50.0% with glasses
+
+   method            our error    paper (Yale, 36 images)
+   PCA, k = 10           44.9%              52.6%
+   one Fisherface        41.0%               5.3%
+   always say "no"       50.0%              50.0%
+   We reproduce that PCA is near chance, but NOT that Fisherfaces
+   solve it.  Their 36 images were PAIRED (the same person with and
+   without glasses, one session); in ORL glasses come with changes
+   of pose, expression and session, so there is no clean signal.
+
+
+figures saved to figures/
