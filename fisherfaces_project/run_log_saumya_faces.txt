@@ -1,0 +1,53 @@
+=====================================================
+  EIGENFACES vs FISHERFACES
+=====================================================
+
+-----------------------------------------------------
+  ORL
+-----------------------------------------------------
+  d = 10304 pixels, N = 192 training, 128 test, c = 32 people
+
+  1. correlation (raw pixels)     : 91.4%
+  2. eigenfaces, best k = 50      : 95.3%
+  3. eigenfaces at k = c-1 = 31   : 94.5%
+  4. FISHERFACES (31 features)    : 90.6%
+
+  checks:
+    (a) ||S_T-(S_B+S_W)||/||S_T|| = 5.52e-16  (should be ~1e-16)
+    (b) rank(S_B) = 31, bound c-1 = 31, kept 31
+    (c) off-diagonal of W'W      = 4.99e-01  (Euclidean)
+        off-diagonal of W'S_W W  = 3.79e-13  (S_W inner product)
+
+-----------------------------------------------------
+  Yale
+-----------------------------------------------------
+  d = 32256 pixels, N = 1520 training, 894 test, c = 38 people
+
+  1. correlation (raw pixels)     : 43.0%
+  2. eigenfaces, best k = 170     : 34.2%
+  3. eigenfaces at k = c-1 = 37   : 29.5%
+  4. FISHERFACES (37 features)    : 67.2%
+
+  checks:
+    (a) ||S_T-(S_B+S_W)||/||S_T|| = 4.75e-16  (should be ~1e-16)
+    (b) rank(S_B) = 37, bound c-1 = 37, kept 37
+    (c) off-diagonal of W'W      = 4.12e-01  (Euclidean)
+        off-diagonal of W'S_W W  = 3.11e-12  (S_W inner product)
+
+
+========== SUMMARY (recognition rate %) ==========
+  database   correlation  eig(best)  eig(c-1)  FISHERFACES
+  ORL              91.4       95.3      94.5         90.6
+  Yale             43.0       34.2      29.5         67.2
+==================================================
+
+  On Yale (illumination) Fisherfaces win by a wide margin: the
+  paper's claim, reproduced.  On ORL (pose and expression) they
+  LOSE, because ORL gives 6 images per person so each class
+  contributes only n_j-1 = 5 degrees of freedom to S_W, while Yale
+  gives 39.  Note also that on Yale correlation BEATS eigenfaces:
+  PCA actively hurts there, its leading components being lighting.
+
+  figures written to /Users/sksingh/Documents/MVC/hw3/fisherfaces_project/figs_saumya/
+
+  DONE

@@ -72,7 +72,8 @@ end
 %           with  matlab -batch , which has no display at all.
 %   true  : windows open and stay open, so you can look at them.  Use this
 %           from the MATLAB desktop.
-showFigures = false;
+showFigures = true
+;
 
 if showFigures
     figVis = 'on';
@@ -114,12 +115,12 @@ mu1   = [ 0; -1];
 mu2   = [ 0;  1];
 nPer  = 500;
 
-% Generate the two clouds.  chol(Sigma) gives R with R'*R = Sigma, so if z
+% Generate the two clouds.  chol(Sigma) gives A with A*A' = Sigma, so if z
 % has identity covariance then R'*z has covariance Sigma.  (This is the same
 % Cholesky factorisation used for Fisherfaces later, in reverse.)
-R  = chol(Sigma);
-X1 = mu1 + R' * randn(2, nPer);
-X2 = mu2 + R' * randn(2, nPer);
+A  = chol(Sigma); % x = Az + mu -> Cov = A*A'
+X1 = mu1 + A' * randn(2, nPer); % N(mu1, A*A')
+X2 = mu2 + A' * randn(2, nPer); % N(mu2, A*A') 
 
 % ---- the two scatter matrices, straight from the definitions ----
 m1 = mean(X1, 2);

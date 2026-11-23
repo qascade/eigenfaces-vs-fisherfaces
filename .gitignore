@@ -37,3 +37,15 @@ fisherfaces_project/s19*.m
 fisherfaces_project/dsfig.m
 fisherfaces_project/buildtest.m
 fisherfaces_project/sgtest.*
+
+# dataset bundle for the viva (57 MB) - built by zipping ORL + CroppedYale
+datasets_for_viva.zip
+
+# report build artefacts
+fisherfaces_project/saumya_report.aux
+fisherfaces_project/saumya_report.log
+fisherfaces_project/saumya_report.out
+code_and_report.zip
+fisherfaces_project/saumya_report.aux
+fisherfaces_project/saumya_report.log
+fisherfaces_project/saumya_report.out

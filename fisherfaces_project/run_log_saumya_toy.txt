@@ -1,0 +1,21 @@
+=====================================================
+  TOY PROBLEM: PCA vs Fisher in 2-D
+=====================================================
+
+  Fisher direction : (0.0045, -1.0000)   <- the y-axis
+  PCA    direction : (-0.9998, -0.0187)   <- the x-axis
+  J(w_Fisher) = 4.2404
+  J(w_PCA)    = 0.0021
+  ratio       = 2014x
+
+  direction   d'      measured error   predicted Phi(-sqrt(J))
+  Fisher     4.11        2.00%             1.97%
+  PCA        0.09       48.30%            48.17%
+  (2*sqrt(J) = 4.12 for Fisher, matching d')
+
+  Mahalanobis separation Delta = 4.00
+  Bayes error (the floor)      = 2.28%
+  Measuring slightly BELOW the floor is sampling noise on 1000
+  points, not a contradiction: nothing can beat the Bayes error.
+
+  figure written to /Users/sksingh/Documents/MVC/hw3/fisherfaces_project/figs_saumya/

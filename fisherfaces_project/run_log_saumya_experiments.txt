@@ -1,0 +1,122 @@
+loading ORL ...
+loading Yale ... (slow)
+
+
+=== E1: cond(S_W) against m ===
+
+  ORL  (N = 192, c = 32, N-c = 160)
+       m   rank(S_W)    cond(S_W)   rate%
+      31        31   6.489e+01    94.5
+      40        40   7.727e+01    93.0
+      60        60   1.753e+02    95.3
+      80        80   3.729e+02    91.4
+     100       100   6.397e+02    91.4
+     120       120   1.688e+03    90.6
+     140       140   5.798e+03    89.1
+     150       150   2.219e+04    91.4
+     155       155   2.380e+05    89.8
+     160       160   7.849e+07    90.6
+   best m = 60 at 95.3%; paper uses m = 160 giving 90.6%
+   cond(S_W) grows 1.21e+06-fold across the sweep
+
+  Yale  (N = 1520, c = 38, N-c = 1482)
+       m   rank(S_W)    cond(S_W)   rate%
+     100       100   3.621e+03    51.6
+     200       200   1.196e+04    56.3
+     400       400   4.905e+04    65.2
+     700       700   2.420e+05    68.8
+    1000      1000   1.098e+06    69.8
+    1200      1200   3.641e+06    69.4
+    1400      1400   4.168e+07    66.8
+    1450      1450   4.257e+08    68.0
+    1482      1481   6.011e+12    67.2
+   best m = 1000 at 69.8%; paper uses m = 1482 giving 67.2%
+   cond(S_W) grows 1.66e+09-fold across the sweep
+
+
+=== E2: label permutation (ORL) ===
+                    true labels   shuffled
+  eigenfaces           94.5%         0.8%
+  Fisherfaces          90.6%         0.0%
+  chance = 100/c        3.1%
+  Below chance, not at it: Fisherfaces separates the SHUFFLED
+  grouping faithfully, so a test face lands near training images
+  that look like it, which now carry the wrong label by design.
+
+
+=== E3: cross-validated m (ORL) ===
+   m =  31   cross-validated =  95.3%
+   m =  40   cross-validated =  97.4%
+   m =  60   cross-validated =  96.9%
+   m =  80   cross-validated =  97.4%
+   m = 100   cross-validated =  97.4%
+   m = 120   cross-validated =  96.9%
+
+   CV chose m = 40, scoring 93.0% on test
+   tuning on test would choose m = 60 for 95.3%
+   the 2.3-point gap is the optimism avoided by not peeking
+
+
+=== E4: noise robustness (ORL) ===
+   sigma  correlation  eigenfaces(k=50)  Fisherfaces
+       0        91.4%            95.3%        90.6%
+      20        92.2%            94.5%        89.8%
+      40        92.2%            94.5%        89.8%
+      80        93.0%            94.5%        89.1%
+     160        89.1%            93.0%        81.2%
+     320        85.2%            89.1%        60.9%
+     640        58.6%            74.2%        30.5%
+
+   one test image = 0.78 points, so smaller gaps are not real
+   drop from sigma 0 to 640: correlation 32.8, eigenfaces 21.1, Fisherfaces 60.2
+   => Fisherfaces fall further, as predicted.  CAVEAT: only at
+      sigma far beyond realistic noise; below 160 nothing moves.
+
+
+=== E5: Yale error against lighting angle ===
+   subset   angle        images   eigenfaces   Fisherfaces
+     1       0- 12 deg        0     (no test images)
+     2      12- 25 deg      104         1.0%          0.0%
+     3      25- 50 deg      152        30.9%          2.0%
+     4      50- 77 deg      300        88.3%         22.0%
+     5      77-180 deg      338        93.8%         66.3%
+
+   Subset 1 is EMPTY, and that is the split bias, not a bug:
+   dir sorts as text and '+' sorts before '-', so the first 40
+   files per subject (the training set) absorb all the frontal
+   lighting.  Every test image is at least 12 degrees off axis.
+
+
+=== E6: sweeping the number of classes (ORL) ===
+      c     N   N-c   #fisherfaces   eigenfaces   Fisherfaces
+      2    12    10            1       100.0%        100.0%
+      4    24    20            3        81.2%        100.0%
+      8    48    40            7        87.5%        100.0%
+     16    96    80           15        96.9%         93.8%
+     32   192   160           31        94.5%         90.6%
+   #fisherfaces equals c-1 on every row: the rank bound is tight
+   and is a LIVE constraint, not just a proof on a page.
+
+
+=== E7: glasses vs no glasses (ORL, leave-one-subject-out) ===
+   117 of 400 images wear glasses (29.2%)
+   balanced subset: 234 images, 50.0% with glasses
+
+   held-out subject never appears in training, so the classifier
+   cannot cheat by recognising the person.
+
+   method                 ERROR RATE (%)      paper (Yale, 36 images)
+   PCA, k = 10                44.9               52.6
+   ONE Fisherface             41.0                5.3
+   always say "no"            50.0               50.0   (balanced)
+
+   restricted to the 8 subjects who appear BOTH ways (61 images):
+   PCA, k = 10                52.5
+   ONE Fisherface             65.6
+
+   c = 2 here, so rank(S_B) <= 1: one single direction decides
+   everything.  That is Fisher's 1936 idea in its original form.
+
+
+  figures written to /Users/sksingh/Documents/MVC/hw3/fisherfaces_project/figs_saumya/
+  DONE
