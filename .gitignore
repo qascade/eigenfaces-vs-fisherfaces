@@ -10,6 +10,8 @@
 !.gitignore
 !README.md
 
+!final_submission/
+!final_submission/**
 !fisherfaces_project/
 !fisherfaces_project/**
 !q1_matlab/

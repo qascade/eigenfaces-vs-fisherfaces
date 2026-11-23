@@ -65,6 +65,79 @@ directions per class and wins comfortably.
 ## Repository layout
 
 ```
+final_submission/              <- the submission: code, report, figures
+  toy.m                        the 2-D toy problem: why PCA is not a classifier
+  eigenfaces_vs_fisherfaces.m  the main comparison, on ORL and Yale
+  experiments.m                experiments E1 to E7
+  figures/                     all eleven figures the scripts draw
+  report.pdf / report.tex      the report
+  study_guide.pdf              full derivations and a question bank
+  run_log_*.txt                the output every quoted number comes from
+  orl_glasses_labels.txt       glasses labels for ORL, made by inspection
+  rename_yale.sh               one-time Yale folder rename (--undo reverses it)
+  README.txt                   how to get the data and run everything
+
+fisherfaces_project/           working directory: sources, logs, archive/
+q1_matlab/                     the HW3 PCA baseline this project builds on
+```
+
+The databases are not in this repository. Extended Yale B's terms forbid
+redistributing its images inside a larger publicly distributed database, so
+download both from the original sources:
+[ORL](https://www.cl.cam.ac.uk/research/dtg/attarchive/facedatabase.html) and
+[Extended Yale B, cropped](https://datarepo.eng.ucsd.edu/visiondata/iskwak/public_html/ExtYaleDatabase/ExtYaleB.html).
+Put them one level above `final_submission/`, then run `./rename_yale.sh` once.
+
+## Results
+
+Recognition rate (%), 1-nearest-neighbour. Fisherfaces always uses exactly
+`c−1` features, so the matched-dimension Eigenfaces column is the fair comparison.
+
+| Dataset | Correlation | Eigenfaces (best k) | Eigenfaces @ k=c−1 | Eigenfaces w/o top 3 | **Fisherfaces** |
+|---|---|---|---|---|---|
+| ORL-32 (HW3 split) | 91.4 | 95.3 | 94.5 | 87.5 | 90.6 |
+| ORL-40 (HW3 split) | 91.2 | 93.8 | 94.4 | 86.9 | 84.4 |
+| ORL-32 (numeric split) | 93.0 | 95.3 | 95.3 | 89.1 | 93.0 |
+| Yale-38 (HW3 split) | 43.0 | 34.2 | 29.5 | 58.7 | **67.2** |
+| Yale-38 (random split) | 85.2 | 70.0 | 50.2 | 89.0 | **97.1** |
+
+**The paper's claim reproduces on Yale**, where the nuisance is illumination:
+Fisherfaces nearly doubles Eigenfaces (67.2 vs 34.2), and on a random split cuts
+the error rate from 30.0% to 2.9%.
+
+**It fails on ORL**, where variation is pose and expression and there are only 6
+images per subject. This is reported rather than tuned away: `rank(S_W) ≤ N−c`
+means each class contributes only `nᵢ−1 = 5` directions to the within-class
+scatter, so `S_W` is badly estimated and LDA then inverts it. Yale has 39
+directions per class and wins comfortably.
+
+### Three findings beyond the paper
+
+1. **`m = N−c` is the weakest part of the recipe.** It is the largest PCA
+   dimension that makes `S_W` invertible, but also the *worst-conditioned* such
+   choice — at `m = N−c` the rank equals the dimension exactly, with no slack, so
+   the smallest eigenvalues are estimation noise and `S_W⁻¹` amplifies them.
+   Sweeping `m` beats the paper's choice on both databases (ORL 95.3 vs 90.6 at
+   m=60; Yale 97.0 vs 95.7 at m=1000), and `cond(S_W)` rises from 2.6e6 to 2.2e11
+   over the last 282 dimensions. On one split it does not even deliver the
+   invertibility it was chosen for.
+
+2. **The lexicographic Yale split is badly biased.** `dir` sorts alphabetically
+   and `'+' < '-'`, so taking "the first 40 files" trains on all 35
+   positive-azimuth lightings and tests on the 24 most extreme negative ones.
+   Randomising the split roughly doubles *every* method. The method *ranking* is
+   unchanged, so the paper's claim is unaffected.
+
+3. **A duplicated image was detectable from the rank alone.** `rank(S_W)`
+   measured 1481 against the theoretical bound `N−c = 1482`. The cause was a stray
+   byte-identical file in `CroppedYale/yaleB12/`; two identical columns stay
+   identical after within-class centring, costing exactly one unit of rank.
+
+---
+
+## Repository layout
+
+```
 fisherfaces_project/
   toy.m                        the 2-D toy problem: why PCA is not a classifier
   eigenfaces_vs_fisherfaces.m  the main comparison, on ORL and Yale
