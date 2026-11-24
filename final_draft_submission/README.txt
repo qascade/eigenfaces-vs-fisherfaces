@@ -36,7 +36,7 @@ SET UP
       project/
         ORL/            40 folders s1..s40, 10 PGM images each
         CroppedYale/    38 folders, about 64 PGM images each
-        sk/             these files
+        final_draft_submission/   these files
 
   CroppedYale ships as yaleB01..yaleB39 with yaleB14 missing, which is not a
   countable range, so run once:

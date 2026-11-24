@@ -10,8 +10,8 @@
 !.gitignore
 !README.md
 
-!sk/
-!sk/**
+!final_draft_submission/
+!final_draft_submission/**
 !fisherfaces_project/
 !fisherfaces_project/**
 !final_submission/
