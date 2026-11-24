@@ -4,7 +4,7 @@
 % maximises (between-class / within-class) and picks y.
 %
 % Notation follows the study guide: S_W within-class scatter, S_B between,
-% w the projection direction, J(w) the Fisher criterion.
+% wLDA the projection direction, J(wLDA) the Fisher criterion.
 
 clc; clear; close all;
 rng(1);                                   % same data every run
@@ -21,35 +21,35 @@ X1 = [4*randn(1, n); 0.5*randn(1, n) + 1];
 X2 = [4*randn(1, n); 0.5*randn(1, n) - 1];
 
 % 2. Class means
-m1 = mean(X1, 2);
-m2 = mean(X2, 2);
+mean1 = mean(X1, 2);
+mean2 = mean(X2, 2);
 
 % 3. Within-class scatter: spread of each class around its own mean
-Sw = (X1 - m1)*(X1 - m1)' + (X2 - m2)*(X2 - m2)';
+Sw = (X1 - mean1)*(X1 - mean1)' + (X2 - mean2)*(X2 - mean2)';
 
-% 4. LDA direction: w = Sw^(-1) (m1 - m2), made unit length.
-%    Sw \ (m1-m2) SOLVES Sw*w = m1-m2; it never forms an inverse.
-%    J(w) is unchanged if w is scaled, so the length is ours to choose.
-w = Sw \ (m1 - m2);
-w = w / norm(w);
+% 4. LDA direction: wLDA = Sw^(-1) (mean1 - mean2), made unit length.
+%    Sw \ (mean1-mean2) SOLVES Sw*wLDA = mean1-mean2; it never forms an inverse.
+%    J(wLDA) is unchanged if wLDA is scaled, so the length is ours to choose.
+wLDA = Sw \ (mean1 - mean2);
+wLDA = wLDA / norm(wLDA);
 
-% 5. Project every point onto w (each point becomes one number)
-y1 = w' * X1;
-y2 = w' * X2;
+% 5. Project every point onto wLDA (each point becomes one number)
+projLDA1 = wLDA' * X1;
+projLDA2 = wLDA' * X2;
 
 % 6. Classify with a threshold halfway between the projected means
-t = (mean(y1) + mean(y2)) / 2;
-acc = 100 * (sum(y1 > t) + sum(y2 <= t)) / (2*n);
-fprintf('LDA direction w = (%.3f, %.3f), accuracy = %.1f%%\n', w, acc);
+threshold = (mean(projLDA1) + mean(projLDA2)) / 2;
+accLDA = 100 * (sum(projLDA1 > threshold) + sum(projLDA2 <= threshold)) / (2*n);
+fprintf('LDA direction wLDA = (%.3f, %.3f), accuracy = %.1f%%\n', wLDA, accLDA);
 
 % For comparison: PCA direction = top eigenvector of the covariance
 X = [X1, X2];
 [V, D] = eig(cov(X'));
 [~, i] = max(diag(D));                    % eig is ASCENDING, so take the max
-wp = V(:, i);
-accp = 100 * (sum(wp'*X1 > (mean(wp'*X1)+mean(wp'*X2))/2) + ...
-              sum(wp'*X2 <= (mean(wp'*X1)+mean(wp'*X2))/2)) / (2*n);
-fprintf('PCA direction   = (%.3f, %.3f), accuracy = %.1f%%\n', wp, accp);
+wPCA = V(:, i);
+accPCA = 100 * (sum(wPCA'*X1 > (mean(wPCA'*X1)+mean(wPCA'*X2))/2) + ...
+              sum(wPCA'*X2 <= (mean(wPCA'*X1)+mean(wPCA'*X2))/2)) / (2*n);
+fprintf('PCA direction   = (%.3f, %.3f), accuracy = %.1f%%\n', wPCA, accPCA);
 
 % 7. Plots
 figure('Position', [100 100 1100 350]);
@@ -57,18 +57,18 @@ figure('Position', [100 100 1100 350]);
 subplot(1, 3, 1); hold on;
 plot(X1(1,:), X1(2,:), 'b.');
 plot(X2(1,:), X2(2,:), 'r.');
-quiver(0, 0, 6*wp(1), 6*wp(2), 0, 'm', 'LineWidth', 2);
-quiver(0, 0, 3*w(1),  3*w(2),  0, 'g', 'LineWidth', 2);
+quiver(0, 0, 6*wPCA(1), 6*wPCA(2), 0, 'm', 'LineWidth', 2);
+quiver(0, 0, 3*wLDA(1),  3*wLDA(2),  0, 'g', 'LineWidth', 2);
 legend('class 1', 'class 2', 'PCA direction', 'LDA direction');
 axis equal; grid on; title('Data and directions');
 
 subplot(1, 3, 2); hold on;
-histogram(wp' * X1, 30);  histogram(wp' * X2, 30);
-title(sprintf('Projected onto PCA: overlap (%.1f%%)', accp)); grid on;
+histogram(wPCA' * X1, 30);  histogram(wPCA' * X2, 30);
+title(sprintf('Projected onto PCA: overlap (%.1f%%)', accPCA)); grid on;
 
 subplot(1, 3, 3); hold on;
-histogram(y1, 30);  histogram(y2, 30);
-title(sprintf('Projected onto LDA: separated (%.1f%%)', acc)); grid on;
+histogram(projLDA1, 30);  histogram(projLDA2, 30);
+title(sprintf('Projected onto LDA: separated (%.1f%%)', accLDA)); grid on;
 
 saveas(gcf, [figDir 'toy.png']);
 fprintf('figure saved to %s\n', figDir);

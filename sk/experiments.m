@@ -30,14 +30,14 @@ if exist(orlDir, 'dir') == 0 || exist(yaleDir, 'dir') == 0
 end
 
 fprintf('loading ORL ...\n');
-[oTr, oYtr, oTe, oYte] = loadFaces(orlDir, 32, 6, 112*92);
+[orlTrain, orlTrainLabels, orlTest, orlTestLabels] = loadFaces(orlDir, 32, 6, 112*92);
 fprintf('loading Yale ... (slow)\n');
-[yTr, yYtr, yTe, yYte, yNames] = loadFaces(yaleDir, 38, 40, 192*168);
+[yaleTrain, yaleTrainLabels, yaleTest, yaleTestLabels, yaleTestNames] = loadFaces(yaleDir, 38, 40, 192*168);
 
-oN = size(oTr, 2);  oC = 32;
-yN = size(yTr, 2);  yC = 38;
-[oU, oMean] = doPCA(oTr);
-[yU, yMean] = doPCA(yTr);
+orlN = size(orlTrain, 2);  orlC = 32;
+yaleN = size(yaleTrain, 2);  yaleC = 38;
+[orlEigenfaces, orlMeanFace] = doPCA(orlTrain);
+[yaleEigenfaces, yaleMeanFace] = doPCA(yaleTrain);
 
 
 %% E1. Sweeping the PCA dimension m, with cond(S_W)
@@ -53,21 +53,21 @@ fprintf('\n\n=== E1: sweeping m (study guide section 24) ===\n');
 
 for db = 1:2
     if db == 1
-        nm = 'ORL';  U = oU; mf = oMean; tr = oTr; ytr = oYtr; te = oTe; yte = oYte;
-        c = oC; N = oN;  ms = [31 40 60 80 100 120 140 160];
+        dbName = 'ORL';  U = orlEigenfaces; meanIm = orlMeanFace; trainIm = orlTrain; trainLab = orlTrainLabels; testIm = orlTest; testLab = orlTestLabels;
+        c = orlC; N = orlN;  ms = [31 40 60 80 100 120 140 160];
     else
-        nm = 'Yale'; U = yU; mf = yMean; tr = yTr; ytr = yYtr; te = yTe; yte = yYte;
-        c = yC; N = yN;  ms = [37 60 100 200 400 700 1000 1200 1482];
+        dbName = 'Yale'; U = yaleEigenfaces; meanIm = yaleMeanFace; trainIm = yaleTrain; trainLab = yaleTrainLabels; testIm = yaleTest; testLab = yaleTestLabels;
+        c = yaleC; N = yaleN;  ms = [37 60 100 200 400 700 1000 1200 1482];
     end
 
     conds = zeros(1, numel(ms));
     rates = zeros(1, numel(ms));
-    fprintf('\n  %s  (N = %d, c = %d, N-c = %d)\n', nm, N, c, N-c);
+    fprintf('\n  %s  (N = %d, c = %d, N-c = %d)\n', dbName, N, c, N-c);
     fprintf('       m   rate%%   rank(S_W)    cond(S_W)\n');
     for i = 1:numel(ms)
-        [W, Sw] = fisherfaces(U, mf, tr, ytr, ms(i), c);
+        [fisherW, Sw] = fisherfaces(U, meanIm, trainIm, trainLab, ms(i), c);
         conds(i) = cond(Sw);
-        rates(i) = nnRate(W'*(tr-mf), ytr, W'*(te-mf), yte);
+        rates(i) = nnRate(fisherW'*(trainIm-meanIm), trainLab, fisherW'*(testIm-meanIm), testLab);
         fprintf('  %6d  %6.1f   %7d    %.2e\n', ms(i), rates(i), rank(Sw), conds(i));
     end
     [bestR, iB] = max(rates);
@@ -78,12 +78,12 @@ for db = 1:2
     subplot(1,2,1);
     semilogy(ms, conds, '-o', 'LineWidth', 1.5); grid on;
     xlabel('m'); ylabel('cond(S_W)  [log scale]');
-    title([nm ': conditioning explodes at m = N-c']);
+    title([dbName ': conditioning explodes at m = N-c']);
     subplot(1,2,2);
     plot(ms, rates, '-o', 'LineWidth', 1.5); grid on;
     xlabel('m'); ylabel('accuracy (%)');
-    title([nm ': accuracy peaks before m = N-c']);
-    saveas(gcf, [figDir 'E1_sweep_m_' nm '.png']);
+    title([dbName ': accuracy peaks before m = N-c']);
+    saveas(gcf, [figDir 'E1_sweep_m_' dbName '.png']);
 end
 
 
@@ -94,25 +94,25 @@ end
 
 fprintf('\n\n=== E2: label permutation (ORL) ===\n');
 
-Ue = oU(:, 1:(oC-1));
-rE = nnRate(Ue'*(oTr-oMean), oYtr, Ue'*(oTe-oMean), oYte);
-W  = fisherfaces(oU, oMean, oTr, oYtr, oN-oC, oC);
-rF = nnRate(W'*(oTr-oMean), oYtr, W'*(oTe-oMean), oYte);
+Umatched = orlEigenfaces(:, 1:(orlC-1));
+rateEigen = nnRate(Umatched'*(orlTrain-orlMeanFace), orlTrainLabels, Umatched'*(orlTest-orlMeanFace), orlTestLabels);
+fisherW  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, orlN-orlC, orlC);
+rateFisher = nnRate(fisherW'*(orlTrain-orlMeanFace), orlTrainLabels, fisherW'*(orlTest-orlMeanFace), orlTestLabels);
 
-shuf = oYtr(randperm(oN));
-rEs = nnRate(Ue'*(oTr-oMean), shuf, Ue'*(oTe-oMean), oYte);
-Ws  = fisherfaces(oU, oMean, oTr, shuf, oN-oC, oC);
-rFs = nnRate(Ws'*(oTr-oMean), shuf, Ws'*(oTe-oMean), oYte);
+shuffledLabels = orlTrainLabels(randperm(orlN));
+rateEigenShuffled = nnRate(Umatched'*(orlTrain-orlMeanFace), shuffledLabels, Umatched'*(orlTest-orlMeanFace), orlTestLabels);
+fisherWshuffled  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, shuffledLabels, orlN-orlC, orlC);
+rateFisherShuffled = nnRate(fisherWshuffled'*(orlTrain-orlMeanFace), shuffledLabels, fisherWshuffled'*(orlTest-orlMeanFace), orlTestLabels);
 
-chance = 100 / oC;
+chance = 100 / orlC;
 fprintf('                 true labels   shuffled\n');
-fprintf('  eigenfaces       %6.1f%%     %6.1f%%\n', rE, rEs);
-fprintf('  Fisherfaces      %6.1f%%     %6.1f%%\n', rF, rFs);
+fprintf('  eigenfaces       %6.1f%%     %6.1f%%\n', rateEigen, rateEigenShuffled);
+fprintf('  Fisherfaces      %6.1f%%     %6.1f%%\n', rateFisher, rateFisherShuffled);
 fprintf('  chance = 100/c   %6.1f%%\n', chance);
 fprintf('  Both collapse, so the real numbers come from the faces.\n');
 
 figure('Position', [100 100 560 360]);
-bar([rE rEs; rF rFs]); hold on;
+bar([rateEigen rateEigenShuffled; rateFisher rateFisherShuffled]); hold on;
 plot([0.5 2.5], [chance chance], 'k--', 'LineWidth', 1.2); hold off;
 set(gca, 'XTickLabel', {'eigenfaces','Fisherfaces'});
 ylabel('accuracy (%)'); grid on;
@@ -130,42 +130,42 @@ saveas(gcf, [figDir 'E2_label_permutation.png']);
 fprintf('\n\n=== E3: cross-validated m (ORL) ===\n');
 
 msCV = [31 40 60 80 100 120];
-cvR  = zeros(1, numel(msCV));
+cvRate  = zeros(1, numel(msCV));
 for i = 1:numel(msCV)
     total = 0;
     for f = 1:6
-        isVal = false(1, oN);
-        for p = 1:oC
-            cols = find(oYtr == p);
+        isVal = false(1, orlN);
+        for p = 1:orlC
+            cols = find(orlTrainLabels == p);
             isVal(cols(f)) = true;
         end
-        trI = oTr(:, ~isVal);  trL = oYtr(~isVal);
-        vaI = oTr(:,  isVal);  vaL = oYtr( isVal);
-        [Uf, mf] = doPCA(trI);
-        Wf = fisherfaces(Uf, mf, trI, trL, msCV(i), oC);
-        total = total + nnRate(Wf'*(trI-mf), trL, Wf'*(vaI-mf), vaL);
+        foldTrain = orlTrain(:, ~isVal);  foldTrainLabels = orlTrainLabels(~isVal);
+        foldVal = orlTrain(:,  isVal);  foldValLabels = orlTrainLabels( isVal);
+        [foldEigenfaces, meanIm] = doPCA(foldTrain);
+        foldFisherW = fisherfaces(foldEigenfaces, meanIm, foldTrain, foldTrainLabels, msCV(i), orlC);
+        total = total + nnRate(foldFisherW'*(foldTrain-meanIm), foldTrainLabels, foldFisherW'*(foldVal-meanIm), foldValLabels);
     end
-    cvR(i) = total / 6;
-    fprintf('   m = %3d   cross-validated = %5.1f%%\n', msCV(i), cvR(i));
+    cvRate(i) = total / 6;
+    fprintf('   m = %3d   cross-validated = %5.1f%%\n', msCV(i), cvRate(i));
 end
 
-testR = zeros(1, numel(msCV));
+testRate = zeros(1, numel(msCV));
 for i = 1:numel(msCV)
-    Wt = fisherfaces(oU, oMean, oTr, oYtr, msCV(i), oC);
-    testR(i) = nnRate(Wt'*(oTr-oMean), oYtr, Wt'*(oTe-oMean), oYte);
+    testFisherW = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, msCV(i), orlC);
+    testRate(i) = nnRate(testFisherW'*(orlTrain-orlMeanFace), orlTrainLabels, testFisherW'*(orlTest-orlMeanFace), orlTestLabels);
 end
-[~, iCV] = max(cvR);
-[bT, iT] = max(testR);
+[~, iCV] = max(cvRate);
+[bT, iT] = max(testRate);
 fprintf('\n   CV picks m = %d, which scores %.1f%% on the test set\n', ...
-        msCV(iCV), testR(iCV));
+        msCV(iCV), testRate(iCV));
 fprintf('   tuning on test would pick m = %d for %.1f%%\n', msCV(iT), bT);
 fprintf('   the %.1f point gap is the optimism avoided by not peeking\n', ...
-        bT - testR(iCV));
+        bT - testRate(iCV));
 
 figure('Position', [100 100 600 380]);
-plot(msCV, cvR, '-o', 'LineWidth', 1.5); hold on;
-plot(msCV, testR, '-s', 'LineWidth', 1.5);
-plot(msCV(iCV), testR(iCV), 'kp', 'MarkerSize', 14, 'MarkerFaceColor', 'y');
+plot(msCV, cvRate, '-o', 'LineWidth', 1.5); hold on;
+plot(msCV, testRate, '-s', 'LineWidth', 1.5);
+plot(msCV(iCV), testRate(iCV), 'kp', 'MarkerSize', 14, 'MarkerFaceColor', 'y');
 hold off; grid on;
 xlabel('m'); ylabel('accuracy (%)');
 legend('cross-validated (honest)', 'test set (peeking)', 'm chosen by CV', ...
@@ -183,27 +183,27 @@ saveas(gcf, [figDir 'E3_cross_validation.png']);
 fprintf('\n\n=== E4: noise robustness (ORL) ===\n');
 
 sigmas = [0 20 40 80 160 320 640];
-rEn = zeros(1, numel(sigmas));
-rFn = zeros(1, numel(sigmas));
-Uk  = oU(:, 1:30);
-Wn  = fisherfaces(oU, oMean, oTr, oYtr, oN-oC, oC);
+rateEigenNoise = zeros(1, numel(sigmas));
+rateFisherNoise = zeros(1, numel(sigmas));
+Uk30  = orlEigenfaces(:, 1:30);
+fisherWnoise  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, orlN-orlC, orlC);
 
 fprintf('   sigma   eigenfaces   Fisherfaces\n');
 for i = 1:numel(sigmas)
     rng(1);                               % same noise for both methods
-    noisy = oTe + sigmas(i) * randn(size(oTe));
-    rEn(i) = nnRate(Uk'*(oTr-oMean), oYtr, Uk'*(noisy-oMean), oYte);
-    rFn(i) = nnRate(Wn'*(oTr-oMean), oYtr, Wn'*(noisy-oMean), oYte);
-    fprintf('  %6d   %9.1f%%  %10.1f%%\n', sigmas(i), rEn(i), rFn(i));
+    noisy = orlTest + sigmas(i) * randn(size(orlTest));
+    rateEigenNoise(i) = nnRate(Uk30'*(orlTrain-orlMeanFace), orlTrainLabels, Uk30'*(noisy-orlMeanFace), orlTestLabels);
+    rateFisherNoise(i) = nnRate(fisherWnoise'*(orlTrain-orlMeanFace), orlTrainLabels, fisherWnoise'*(noisy-orlMeanFace), orlTestLabels);
+    fprintf('  %6d   %9.1f%%  %10.1f%%\n', sigmas(i), rateEigenNoise(i), rateFisherNoise(i));
 end
 fprintf('   drop from sigma 0 to %d: eigenfaces %.1f points, Fisherfaces %.1f\n', ...
-        sigmas(end), rEn(1)-rEn(end), rFn(1)-rFn(end));
+        sigmas(end), rateEigenNoise(1)-rateEigenNoise(end), rateFisherNoise(1)-rateFisherNoise(end));
 fprintf('   Nothing moves below sigma = 160: projection is a strong denoiser,\n');
 fprintf('   so the effect only appears far beyond realistic noise levels.\n');
 
 figure('Position', [100 100 600 380]);
-plot(sigmas, rEn, '-s', 'LineWidth', 1.5); hold on;
-plot(sigmas, rFn, '-^', 'LineWidth', 1.5); hold off; grid on;
+plot(sigmas, rateEigenNoise, '-s', 'LineWidth', 1.5); hold on;
+plot(sigmas, rateFisherNoise, '-^', 'LineWidth', 1.5); hold off; grid on;
 xlabel('noise standard deviation added to test images');
 ylabel('accuracy (%)');
 legend('eigenfaces (k=30)', 'Fisherfaces', 'Location', 'southwest');
@@ -221,10 +221,10 @@ saveas(gcf, [figDir 'E4_noise.png']);
 
 fprintf('\n\n=== E5: error against lighting angle (Yale) ===\n');
 
-nTe = numel(yNames);
+nTe = numel(yaleTestNames);
 theta = zeros(1, nTe);
 for i = 1:nTe
-    s  = yNames{i};
+    s  = yaleTestNames{i};
     ia = strfind(s, 'A');             % uppercase A appears exactly once
     ie = strfind(s, 'E');             % uppercase E appears exactly once
     az = str2double(s(ia+1 : ie-1));
@@ -232,35 +232,35 @@ for i = 1:nTe
     theta(i) = acosd(cosd(az) * cosd(el));
 end
 
-bin = zeros(1, nTe);
+angleBin = zeros(1, nTe);
 for i = 1:nTe
-    if     theta(i) <= 12, bin(i) = 1;
-    elseif theta(i) <= 25, bin(i) = 2;
-    elseif theta(i) <= 50, bin(i) = 3;
-    elseif theta(i) <= 77, bin(i) = 4;
-    else,                  bin(i) = 5;
+    if     theta(i) <= 12, angleBin(i) = 1;
+    elseif theta(i) <= 25, angleBin(i) = 2;
+    elseif theta(i) <= 50, angleBin(i) = 3;
+    elseif theta(i) <= 77, angleBin(i) = 4;
+    else,                  angleBin(i) = 5;
     end
 end
 
-Uy = yU(:, 1:(yC-1));
-pe = nnPredict(Uy'*(yTr-yMean), yYtr, Uy'*(yTe-yMean));
-Wy = fisherfaces(yU, yMean, yTr, yYtr, yN-yC, yC);
-pf = nnPredict(Wy'*(yTr-yMean), yYtr, Wy'*(yTe-yMean));
+yaleUmatched = yaleEigenfaces(:, 1:(yaleC-1));
+predEigen = nnPredict(yaleUmatched'*(yaleTrain-yaleMeanFace), yaleTrainLabels, yaleUmatched'*(yaleTest-yaleMeanFace));
+yaleFisherW = fisherfaces(yaleEigenfaces, yaleMeanFace, yaleTrain, yaleTrainLabels, yaleN-yaleC, yaleC);
+predFisher = nnPredict(yaleFisherW'*(yaleTrain-yaleMeanFace), yaleTrainLabels, yaleFisherW'*(yaleTest-yaleMeanFace));
 
-errE = nan(1,5); errF = nan(1,5); cnt = zeros(1,5);
-lo = [0 12 25 50 77]; hi = [12 25 50 77 180];
+errEigen = nan(1,5); errFisher = nan(1,5); cnt = zeros(1,5);
+binLo = [0 12 25 50 77]; binHi = [12 25 50 77 180];
 fprintf('   bin   angle          images   eigenfaces   Fisherfaces\n');
 for b = 1:5
-    sel = (bin == b);
+    sel = (angleBin == b);
     cnt(b) = sum(sel);
     if cnt(b) == 0
-        fprintf('    %d    %3d-%3d deg         0    (no test images)\n', b, lo(b), hi(b));
+        fprintf('    %d    %3d-%3d deg         0    (no test images)\n', b, binLo(b), binHi(b));
         continue;
     end
-    errE(b) = 100 * sum(pe(sel) ~= yYte(sel)) / cnt(b);
-    errF(b) = 100 * sum(pf(sel) ~= yYte(sel)) / cnt(b);
+    errEigen(b) = 100 * sum(predEigen(sel) ~= yaleTestLabels(sel)) / cnt(b);
+    errFisher(b) = 100 * sum(predFisher(sel) ~= yaleTestLabels(sel)) / cnt(b);
     fprintf('    %d    %3d-%3d deg     %5d   %9.1f%%  %10.1f%%\n', ...
-            b, lo(b), hi(b), cnt(b), errE(b), errF(b));
+            b, binLo(b), binHi(b), cnt(b), errEigen(b), errFisher(b));
 end
 if cnt(1) == 0
     fprintf('   The first bin is EMPTY because dir sorts names as text and\n');
@@ -269,7 +269,7 @@ if cnt(1) == 0
 end
 
 figure('Position', [100 100 620 380]);
-bar([errE(:) errF(:)]);
+bar([errEigen(:) errFisher(:)]);
 set(gca, 'XTickLabel', {'0-12','13-25','26-50','51-77','>77'});
 xlabel('angle of the light from the optical axis (degrees)');
 ylabel('error rate (%)'); grid on;
@@ -284,36 +284,36 @@ saveas(gcf, [figDir 'E5_lighting_angle.png']);
 
 fprintf('\n\n=== E6: sweeping the number of classes (ORL) ===\n');
 
-cs = [2 4 8 16 32];
-nF = zeros(1, numel(cs));
-rE6 = zeros(1, numel(cs));
-rF6 = zeros(1, numel(cs));
+classCounts = [2 4 8 16 32];
+numFisherfaces = zeros(1, numel(classCounts));
+rateEigenByC = zeros(1, numel(classCounts));
+rateFisherByC = zeros(1, numel(classCounts));
 fprintf('       c     N   N-c   fisherfaces   eigenfaces   Fisherfaces\n');
-for i = 1:numel(cs)
-    c = cs(i);
-    [tr, trL, te, teL] = loadFaces(orlDir, c, 6, 112*92);
-    N = size(tr, 2);
-    [Uc, mc] = doPCA(tr);
-    Uk2 = Uc(:, 1:max(1, c-1));
-    rE6(i) = nnRate(Uk2'*(tr-mc), trL, Uk2'*(te-mc), teL);
-    W6 = fisherfaces(Uc, mc, tr, trL, N-c, c);
-    nF(i)  = size(W6, 2);
-    rF6(i) = nnRate(W6'*(tr-mc), trL, W6'*(te-mc), teL);
+for i = 1:numel(classCounts)
+    c = classCounts(i);
+    [trainIm, foldTrainLabels, testIm, teL] = loadFaces(orlDir, c, 6, 112*92);
+    N = size(trainIm, 2);
+    [classEigenfaces, classMeanFace] = doPCA(trainIm);
+    UmatchedC = classEigenfaces(:, 1:max(1, c-1));
+    rateEigenByC(i) = nnRate(UmatchedC'*(trainIm-classMeanFace), foldTrainLabels, UmatchedC'*(testIm-classMeanFace), teL);
+    fisherWc = fisherfaces(classEigenfaces, classMeanFace, trainIm, foldTrainLabels, N-c, c);
+    numFisherfaces(i)  = size(fisherWc, 2);
+    rateFisherByC(i) = nnRate(fisherWc'*(trainIm-classMeanFace), foldTrainLabels, fisherWc'*(testIm-classMeanFace), teL);
     fprintf('  %6d %5d %5d   %11d   %9.1f%%  %10.1f%%\n', ...
-            c, N, N-c, nF(i), rE6(i), rF6(i));
+            c, N, N-c, numFisherfaces(i), rateEigenByC(i), rateFisherByC(i));
 end
 fprintf('   The number of Fisherfaces equals c-1 on every row.\n');
 
 figure('Position', [100 100 900 340]);
 subplot(1,2,1);
-plot(cs, nF, '-o', 'LineWidth', 1.5); hold on;
-plot(cs, cs-1, 'k--', 'LineWidth', 1.2); hold off; grid on;
+plot(classCounts, numFisherfaces, '-o', 'LineWidth', 1.5); hold on;
+plot(classCounts, classCounts-1, 'k--', 'LineWidth', 1.2); hold off; grid on;
 xlabel('number of classes c'); ylabel('number of Fisherfaces');
 legend('measured', 'c-1', 'Location', 'northwest');
 title('the c-1 ceiling is exactly met');
 subplot(1,2,2);
-plot(cs, rE6, '-s', 'LineWidth', 1.5); hold on;
-plot(cs, rF6, '-^', 'LineWidth', 1.5); hold off; grid on;
+plot(classCounts, rateEigenByC, '-s', 'LineWidth', 1.5); hold on;
+plot(classCounts, rateFisherByC, '-^', 'LineWidth', 1.5); hold off; grid on;
 xlabel('number of classes c'); ylabel('accuracy (%)');
 legend('eigenfaces', 'Fisherfaces', 'Location', 'southwest');
 title('both get harder as c grows');
@@ -334,45 +334,45 @@ saveas(gcf, [figDir 'E6_number_of_classes.png']);
 fprintf('\n\n=== E7: glasses vs no glasses (ORL) ===\n');
 
 G = readGlasses('orl_glasses_labels.txt');
-[aIm, aSubj] = loadFaces(orlDir, 40, 10, 112*92);
-aG = zeros(1, size(aIm, 2));
-for i = 1:size(aIm, 2)
-    k = sum(aSubj(1:i) == aSubj(i));      % which image of this person
-    aG(i) = G(aSubj(i), k);
+[allImages, allSubjects] = loadFaces(orlDir, 40, 10, 112*92);
+allGlasses = zeros(1, size(allImages, 2));
+for i = 1:size(allImages, 2)
+    k = sum(allSubjects(1:i) == allSubjects(i));      % which image of this person
+    allGlasses(i) = G(allSubjects(i), k);
 end
-fprintf('   %d of 400 images wear glasses (%.1f%%)\n', sum(aG), 100*mean(aG));
+fprintf('   %d of 400 images wear glasses (%.1f%%)\n', sum(allGlasses), 100*mean(allGlasses));
 fprintf('   on the UNbalanced set, always answering "no" would score %.1f%%,\n', ...
-        100*max(sum(aG==0), sum(aG==1))/numel(aG));
+        100*max(sum(allGlasses==0), sum(allGlasses==1))/numel(allGlasses));
 fprintf('   which beats any real method -- hence the balancing below.\n');
 
-gI = find(aG == 1);
-nI = find(aG == 0);
-nI = nI(randperm(numel(nI), numel(gI)));  % balance it
-keepI = sort([gI nI]);
-bIm = aIm(:, keepI);  bSubj = aSubj(keepI);  bG = aG(keepI);
-fprintf('   balanced subset: %d images, %.1f%% with glasses\n', numel(bG), 100*mean(bG));
+glassesIdx = find(allGlasses == 1);
+noGlassesIdx = find(allGlasses == 0);
+noGlassesIdx = noGlassesIdx(randperm(numel(noGlassesIdx), numel(glassesIdx)));  % balance it
+keepIdx = sort([glassesIdx noGlassesIdx]);
+balIm = allImages(:, keepIdx);  balSubjects = allSubjects(keepIdx);  balGlasses = allGlasses(keepIdx);
+fprintf('   balanced subset: %d images, %.1f%% with glasses\n', numel(balGlasses), 100*mean(balGlasses));
 
-okE = 0; okF = 0; tot = 0;
+correctEigen = 0; correctFisher = 0; tot = 0;
 for p = 1:40
-    isTe = (bSubj == p);
+    isTe = (balSubjects == p);
     if sum(isTe) == 0, continue; end
-    trI = bIm(:, ~isTe);  trL = bG(~isTe) + 1;   % labels must be 1 and 2
-    teI = bIm(:,  isTe);  teL = bG( isTe) + 1;
-    if numel(unique(trL)) < 2, continue; end
+    foldTrain = balIm(:, ~isTe);  foldTrainLabels = balGlasses(~isTe) + 1;   % labels must be 1 and 2
+    teI = balIm(:,  isTe);  teL = balGlasses( isTe) + 1;
+    if numel(unique(foldTrainLabels)) < 2, continue; end
 
-    [Ug, mg] = doPCA(trI);
-    Wg = fisherfaces(Ug, mg, trI, trL, size(trI,2) - 2, 2);
-    pf7 = nnPredict(Wg'*(trI-mg), trL, Wg'*(teI-mg));
-    Uk7 = Ug(:, 1:10);
-    pe7 = nnPredict(Uk7'*(trI-mg), trL, Uk7'*(teI-mg));
+    [glassesEigenfaces, glassesMeanFace] = doPCA(foldTrain);
+    glassesFisherW = fisherfaces(glassesEigenfaces, glassesMeanFace, foldTrain, foldTrainLabels, size(foldTrain,2) - 2, 2);
+    predFisherGlasses = nnPredict(glassesFisherW'*(foldTrain-glassesMeanFace), foldTrainLabels, glassesFisherW'*(teI-glassesMeanFace));
+    Uk10 = glassesEigenfaces(:, 1:10);
+    predEigenGlasses = nnPredict(Uk10'*(foldTrain-glassesMeanFace), foldTrainLabels, Uk10'*(teI-glassesMeanFace));
 
-    okF = okF + sum(pf7 == teL);
-    okE = okE + sum(pe7 == teL);
+    correctFisher = correctFisher + sum(predFisherGlasses == teL);
+    correctEigen = correctEigen + sum(predEigenGlasses == teL);
     tot = tot + numel(teL);
 end
 fprintf('\n   method            our error    paper (Yale, 36 images)\n');
-fprintf('   PCA, k = 10       %8.1f%%              52.6%%\n', 100 - 100*okE/tot);
-fprintf('   one Fisherface    %8.1f%%               5.3%%\n', 100 - 100*okF/tot);
+fprintf('   PCA, k = 10       %8.1f%%              52.6%%\n', 100 - 100*correctEigen/tot);
+fprintf('   one Fisherface    %8.1f%%               5.3%%\n', 100 - 100*correctFisher/tot);
 fprintf('   always say "no"       50.0%%              50.0%%\n');
 fprintf('   We reproduce that PCA is near chance, but NOT that Fisherfaces\n');
 fprintf('   solve it.  Their 36 images were PAIRED (the same person with and\n');
@@ -380,7 +380,7 @@ fprintf('   without glasses, one session); in ORL glasses come with changes\n');
 fprintf('   of pose, expression and session, so there is no clean signal.\n');
 
 figure('Position', [100 100 560 360]);
-bar([100-100*okE/tot, 100-100*okF/tot]); hold on;
+bar([100-100*correctEigen/tot, 100-100*correctFisher/tot]); hold on;
 plot([0.5 2.5], [50 50], 'k--', 'LineWidth', 1.2); hold off;
 set(gca, 'XTickLabel', {'PCA (k=10)', 'one Fisherface'});
 ylabel('error rate (%)'); grid on;
@@ -478,7 +478,7 @@ Wfld = V2(:, order(1:c-1));
 Wopt = Wpca * Wfld;
 
 % Unit length, and this is NOT cosmetic: eig(Sb,Sw) returns columns with
-% W'*S_W*W = I, so their Euclidean lengths differ by orders of magnitude,
+% fisherW'*S_W*fisherW = I, so their Euclidean lengths differ by orders of magnitude,
 % and nearest neighbour would be dominated by the longest ones.
 for i = 1:size(Wopt, 2)
     Wopt(:, i) = Wopt(:, i) / norm(Wopt(:, i));

@@ -33,8 +33,8 @@ dataName  = sets{setNo, 1};
 dataDir   = sets{setNo, 2};
 numPeople = sets{setNo, 3};    % c = number of people (classes)
 numTrain  = sets{setNo, 4};    % training images per person (rest are test)
-h         = sets{setNo, 5};
-w         = sets{setNo, 6};
+imgHeight         = sets{setNo, 5};
+imgWidth         = sets{setNo, 6};
 
 % Fail loudly if the data is not there.  dir() on a missing folder returns an
 % EMPTY list rather than an error, so without this the script would carry on
@@ -96,9 +96,9 @@ U = U(:, 1:N-1);                   % last one has eigenvalue 0 (data was centred
 %       ||a-b||^2 = 2 - 2*a'*b
 % so the nearest neighbour is the most correlated one.  If a projection
 % cannot beat this, it is not earning its place.
-trN = normaliseColumns(trainImages);
-teN = normaliseColumns(testImages);
-accCorr = nearestNeighbour(trN, trainLabels, teN, testLabels);
+trainNorm = normaliseColumns(trainImages);
+testNorm = normaliseColumns(testImages);
+accCorr = nearestNeighbour(trainNorm, trainLabels, testNorm, testLabels);
 fprintf('Correlation (raw pixels):  accuracy = %.2f%%\n', accCorr);
 
 %% 5. EIGENFACES
@@ -117,8 +117,8 @@ for kk = ks
 end
 fprintf('Eigenfaces  (best k = %d): accuracy = %.2f%%\n', bestK, accBest);
 
-Uc = U(:, 1:(c-1));
-accEigMatched = nearestNeighbour(Uc'*A, trainLabels, Uc'*(testImages-meanFace), testLabels);
+Umatched = U(:, 1:(c-1));
+accEigMatched = nearestNeighbour(Umatched'*A, trainLabels, Umatched'*(testImages-meanFace), testLabels);
 fprintf('Eigenfaces  (k = c-1 = %d): accuracy = %.2f%%\n', c-1, accEigMatched);
 
 % The paper's other baseline: throw away the first three eigenfaces.  Under
@@ -126,22 +126,22 @@ fprintf('Eigenfaces  (k = c-1 = %d): accuracy = %.2f%%\n', c-1, accEigMatched);
 % 3-D subspace, so components 1-3 are expected to be mostly illumination.
 % Dropping them should HELP where lighting is the nuisance (Yale) and HURT
 % where the leading components carry identity (ORL).
-accDrop3 = 0; bestK3 = 0;
+accDrop3 = 0; bestKdrop3 = 0;
 for kk = ks
     if kk + 3 > size(U, 2), continue; end
-    Uk3 = U(:, 4:(kk+3));          % skip the first three
-    r = nearestNeighbour(Uk3'*A, trainLabels, Uk3'*(testImages-meanFace), testLabels);
+    Udrop3 = U(:, 4:(kk+3));          % skip the first three
+    r = nearestNeighbour(Udrop3'*A, trainLabels, Udrop3'*(testImages-meanFace), testLabels);
     if r > accDrop3
         accDrop3 = r;
-        bestK3   = kk;
+        bestKdrop3   = kk;
     end
 end
-fprintf('Eigenfaces  w/o top 3 (k = %d): accuracy = %.2f%%\n', bestK3, accDrop3);
+fprintf('Eigenfaces  w/o top 3 (k = %d): accuracy = %.2f%%\n', bestKdrop3, accDrop3);
 
 %% 6. FISHERFACES
 % Step A: PCA down to m = N - c dimensions, which makes S_W invertible.
 % In pixel space rank(S_W) <= N - c, far below d, so S_W is singular there
-% and J(w) is not even defined.  Projecting first throws away exactly the
+% and J(imgWidth) is not even defined.  Projecting first throws away exactly the
 % directions S_W knows nothing about.
 m = N - c;
 Wpca = U(:, 1:m);                  % d x m
@@ -149,26 +149,26 @@ Z = Wpca' * A;                     % m x N, each image as m numbers
 
 % Step B: the two scatter matrices in this space.
 % The overall mean of Z is zero, because A was already centred, which is why
-% S_B below uses mp directly rather than (mp - overall mean).
+% S_B below uses classMean directly rather than (classMean - overall mean).
 Sb = zeros(m, m);
 Sw = zeros(m, m);
 for p = 1:c
-    Zp = Z(:, trainLabels == p);   % this person's images
-    Np = size(Zp, 2);
-    mp = mean(Zp, 2);              % this person's mean
+    classData = Z(:, trainLabels == p);   % this person's images
+    classCount = size(classData, 2);
+    classMean = mean(classData, 2);              % this person's mean
 
-    Sb = Sb + Np * (mp * mp');     % spread of the person means
+    Sb = Sb + classCount * (classMean * classMean');     % spread of the person means
 
-    for j = 1:Np
-        diff = Zp(:, j) - mp;      % image minus its own person's mean
-        Sw = Sw + diff * diff';    % spread within this person
+    for j = 1:classCount
+        dev = classData(:, j) - classMean;      % image minus its own person's mean
+        Sw = Sw + dev * dev';    % spread within this person
     end
 end
 
 fprintf('rank(S_B) = %d (bound c-1 = %d), rank(S_W) = %d (bound N-c = %d)\n', ...
         rank(Sb), c-1, rank(Sw), m);
 
-% Step C: solve S_B*w = lambda*S_W*w and keep the top c-1 directions.
+% Step C: solve S_B*imgWidth = lambda*S_W*imgWidth and keep the top c-1 directions.
 % rank(S_B) <= c-1, so everything past c-1 has eigenvalue zero and its
 % eigenvector is an arbitrary basis of a null space -- pure noise.
 % (The study guide derives the Cholesky whitening route by hand; we measured
@@ -182,7 +182,7 @@ Wopt = Wpca * Wfld;                % d x (c-1): the Fisherfaces
 
 % Step E: make each Fisherface unit length.  THIS IS NOT COSMETIC.
 % eig(Sb,Sw) returns columns with W'*S_W*W = I, NOT unit Euclidean length,
-% so their lengths differ by a factor of ~287 here.  J(w) does not care, but
+% so their lengths differ by a factor of ~287 here.  J(imgWidth) does not care, but
 % nearest neighbour with Euclidean distance does: the long directions would
 % dominate every comparison.  Skipping these lines costs ORL 88.5% -> 29.5%.
 for i = 1:size(Wopt, 2)
@@ -195,15 +195,15 @@ fprintf('FISHERFACES (%d dims):      accuracy = %.2f%%\n', c-1, accFisher);
 
 %% 7. Show the mean face, first 8 eigenfaces and first 8 Fisherfaces
 figure('Position', [100 100 900 400]);
-subplot(3, 8, 1); imagesc(reshape(meanFace, h, w)); colormap gray; axis image off;
+subplot(3, 8, 1); imagesc(reshape(meanFace, imgHeight, imgWidth)); colormap gray; axis image off;
 title('mean');
 for i = 1:8
     subplot(3, 8, 8 + i);
-    imagesc(reshape(U(:, i), h, w)); colormap gray; axis image off;
+    imagesc(reshape(U(:, i), imgHeight, imgWidth)); colormap gray; axis image off;
     title(['eig ' num2str(i)]);
 
     subplot(3, 8, 16 + i);
-    imagesc(reshape(Wopt(:, i), h, w)); colormap gray; axis image off;
+    imagesc(reshape(Wopt(:, i), imgHeight, imgWidth)); colormap gray; axis image off;
     title(['fish ' num2str(i)]);
 end
 sgtitle([dataName ': eigenfaces are smooth, Fisherfaces are high-frequency']);
@@ -222,11 +222,11 @@ function rate = nearestNeighbour(trainFeat, trainLabels, testFeat, testLabels)
 % which neighbour is nearest.
 correct = 0;
 for t = 1:size(testFeat, 2)
-    bestDist = inf;
+    bestSqDist = inf;
     for j = 1:size(trainFeat, 2)
-        dist = sum((testFeat(:, t) - trainFeat(:, j)).^2);
-        if dist < bestDist
-            bestDist  = dist;
+        sqDist = sum((testFeat(:, t) - trainFeat(:, j)).^2);
+        if sqDist < bestSqDist
+            bestSqDist  = sqDist;
             bestLabel = trainLabels(j);
         end
     end
@@ -238,13 +238,13 @@ rate = 100 * correct / size(testFeat, 2);
 end
 
 
-function Xn = normaliseColumns(X)
+function Xnorm = normaliseColumns(X)
 % Make every image zero mean and unit norm.
-Xn = X - mean(X, 1);
-for i = 1:size(Xn, 2)
-    nrm = norm(Xn(:, i));
+Xnorm = X - mean(X, 1);
+for i = 1:size(Xnorm, 2)
+    nrm = norm(Xnorm(:, i));
     if nrm > 0
-        Xn(:, i) = Xn(:, i) / nrm;
+        Xnorm(:, i) = Xnorm(:, i) / nrm;
     end
 end
 end
