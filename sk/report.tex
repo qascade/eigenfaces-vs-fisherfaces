@@ -186,7 +186,6 @@ Error climbs with angle for both methods and the gap \emph{widens}: at $26$--$50
 \item \textbf{The paper's claim holds where the within-person nuisance is large and structured.} Under lighting change Fisherfaces take Yale from 34.23\% to 67.23\%, nearly doubling the recognition rate, and are $15\times$ better than Eigenfaces in the $26$--$50^\circ$ bin.
 \item \textbf{It is a claim about nuisance structure, not ``LDA is always better''.} On ORL, which varies by pose and expression with 6 images per person, Eigenfaces win, and Fisherfaces lose even to raw-pixel correlation. What decides the outcome is how much \emph{structured} within-class variation there is for LDA to discount, not the algorithm.
 \item \textbf{$m=N-c$ is the weakest part of the recipe.} It is the worst-conditioned valid choice, and a smaller $m$ does better on both databases. The blow-up at $\gamma\to1$ is predicted by Marchenko--Pastur, so this is not a quirk of our data.
-\item \textbf{Protocol mattered as much as the algorithm.} The text-sorted Yale split puts every frontal lamp in training and every hard one in test, and two things that looked like failures were not: Fisherfaces at 29.5\% was a missing unit-norm step, and the empty $0$--$12^\circ$ bin is that sorting accident, not a parsing bug.
 \end{enumerate}
 
 \end{document}
