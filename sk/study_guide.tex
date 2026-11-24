@@ -122,9 +122,17 @@ $w\T S_Ww=1$ with a Lagrange multiplier gives
 The leading factor is a scalar, and $J$ is scale-invariant (numerator and
 denominator are both quadratic in $w$), so we are free to normalise $w$.
 
-\textbf{Result.} LDA picks $(-0.004,\,1.000)$ --- essentially the $y$-axis ---
-and gets $97.5\%$. PCA picks $(-1.000,\,-0.001)$, the $x$-axis, and gets
+\textbf{Result.} LDA picks $(-0.001,\,1.000)$ --- essentially the $y$-axis ---
+and gets $97.0\%$. PCA picks $(-1.000,\,0.009)$, the $x$-axis, and gets
 $48.5\%$, where chance is $50\%$.
+
+\textbf{How the points are classified.} After projection each point is a single
+number, and we assign it to the nearer \emph{projected class mean} by squared
+Euclidean distance --- the same rule the face scripts use. In one dimension
+this is identical to putting a threshold midway between the two means (we
+checked: both give $97.0\%$), but written as a distance it needs no assumption
+about which class falls on which side, and it generalises to any number of
+dimensions.
 
 \textbf{Syntax worth knowing.} \verb|Sw \ (m1-m2)| \emph{solves}
 $S_Ww=\mu_1-\mu_2$; it does not form an inverse. Backslash is a solve, not a

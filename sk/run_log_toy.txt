@@ -1,3 +1,3 @@
-LDA direction wLDA = (-0.004, 1.000), accuracy = 97.5%
-PCA direction   = (-1.000, -0.001), accuracy = 48.5%
+LDA direction wLDA = (-0.001, 1.000), accuracy = 97.0%
+PCA direction   = (-1.000, 0.009), accuracy = 48.5%
 figure saved to figures/
