@@ -107,10 +107,21 @@ fprintf('\n\n=== E2: glasses vs no glasses (ORL) ===\n');
 
 G = readGlasses('orl_glasses_labels.txt');
 [allImages, allSubjects] = loadFaces(orlDir, 40, 10, 112*92);
+
+% Column j of the label table describes the file named j.pgm.  loadFaces
+% returns the images in dir() order, and dir sorts as TEXT, so position 2 is
+% 10.pgm, not 2.pgm.  Looking the label up by position would therefore shift
+% the labels of 9 files out of every 10.  Read the number out of the filename
+% instead, so the lookup cannot depend on the ordering at all.
 allGlasses = zeros(1, size(allImages, 2));
-for i = 1:size(allImages, 2)
-    k = sum(allSubjects(1:i) == allSubjects(i));      % which image of this person
-    allGlasses(i) = G(allSubjects(i), k);
+col = 0;
+for p = 1:40
+    files = dir([orlDir '/s' num2str(p) '/*.pgm']);
+    for j = 1:numel(files)
+        col = col + 1;
+        imgNum = sscanf(files(j).name, '%d');          % '7.pgm' -> 7
+        allGlasses(col) = G(p, imgNum);
+    end
 end
 fprintf('   %d of 400 images wear glasses (%.1f%%)\n', sum(allGlasses), 100*mean(allGlasses));
 fprintf('   on the UNbalanced set, always answering "no" would score %.1f%%,\n', ...
@@ -122,7 +133,7 @@ noGlassesIdx = find(allGlasses == 0);
 fprintf('   balanced subset: %d images, 50.0%% with glasses\n', 2*numel(glassesIdx));
 
 % WHICH no-glasses images get picked matters: a single draw moved the
-% Fisherface error from 36% to 51% in testing, so one draw proves nothing.
+% Fisherface error from 35% to 44% in testing, so one draw proves nothing.
 % Average over several draws and report the spread as well as the mean.
 nDraws = 10;
 errEigenDraw = zeros(1, nDraws);

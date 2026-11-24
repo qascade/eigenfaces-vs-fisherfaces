@@ -457,11 +457,11 @@ wear glasses, 8 people appear both ways. On the raw set, always answering
 seen in training and neither method can cheat by recognising the person.
 
 \textbf{One draw is not an experiment.} Which 117 of the 283 no-glasses images
-get drawn moved the Fisherface error from $35.9\%$ to $50.9\%$, so the whole
+get drawn moved the Fisherface error from $34.6\%$ to $44.4\%$, so the whole
 leave-one-subject-out evaluation is repeated over ten draws.
 
-\textbf{Result: PCA $43.1\%$ error (range $37.2$--$48.3$), one Fisherface
-$41.5\%$ (range $35.9$--$50.9$), baseline $50\%$.}
+\textbf{Result: PCA $39.1\%$ error (range $32.5$--$45.3$), one Fisherface
+$38.2\%$ (range $34.6$--$44.4$), baseline $50\%$.}
 The paper got $52.6\%$ and $5.3\%$. \emph{We reproduce that PCA is near chance
 but not that Fisherfaces solve the task.} The likely cause is the data: the
 paper's 36 images were \emph{paired} --- the same person with and without
@@ -828,7 +828,7 @@ features.
   paper used 36 paired Yale images --- a difference that turns out to matter.
 \item[Anything that did not come out as the paper says?] Two things, and the
   report says so. E2: we reproduce that PCA is near chance on glasses but not
-  that Fisherfaces solve it ($41.5\%$ error against their $5.3\%$), because
+  that Fisherfaces solve it ($38.2\%$ error against their $5.3\%$), because
   their images were paired and ORL's are not. And on ORL Fisherfaces lose to
   eigenfaces, $90.62\%$ against $95.31\%$,
   and lose to raw-pixel correlation as well. ORL varies by pose and expression
@@ -850,7 +850,7 @@ Fisherfaces without unit-norming & $90.6\% \to 29.5\%$\\
 Best $m$ vs the paper's $N-c$ (ORL) & $60$ vs $160$; $95.3$ vs $90.6$\\
 $\kappa(S_W)$ at $m=N-c$ & $7.9\times10^{7}$ (ORL), $6.0\times10^{12}$ (Yale)\\
 Number of Fisherfaces & exactly $c-1$, every $c$ tested\\
-Glasses, one Fisherface & $41.5\%$ error vs the paper's $5.3\%$\\
+Glasses, one Fisherface & $38.2\%$ error vs the paper's $5.3\%$\\
 Lighting $26$--$50^\circ$ & $30.9\%$ vs $2.0\%$ error\\
 Lighting $>77^\circ$ (hardest bin) & $93.8\%$ vs $66.3\%$ error\\\bottomrule
 \end{tabular}

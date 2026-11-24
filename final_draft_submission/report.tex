@@ -177,12 +177,12 @@ A different question, and the paper's Section 3.3: not \emph{who} is this, but \
 
 ORL ships no glasses labels, so we labelled all 400 images by inspection: 117 wear glasses and 8 people appear both with and without, which is what makes the question non-trivial. On the raw set, always answering ``no'' scores 70.8\% and beats any real method, so we balanced it to 234 images (50/50) and used leave-one-\emph{subject}-out: the test face is never seen in training, so the classifier cannot cheat by recognising the person.
 
-\textbf{One balanced subset is not an experiment.} Which 117 no-glasses images get drawn moved the Fisherface error from 35.9\% to 50.9\%, so we average over ten draws and report the range too.
+\textbf{One balanced subset is not an experiment.} Which 117 no-glasses images get drawn moved the Fisherface error from 34.6\% to 44.4\%, so we average over ten draws and report the range too.
 \begin{center}
 \begin{tabular}{lccc}\toprule
 Error (\%) & Ours (mean of 10) & Range & Paper (Yale, 36 images)\\\midrule
-PCA ($k=10$) & 43.1 & 37.2--48.3 & 52.6\\
-One Fisherface & \textbf{41.5} & 35.9--50.9 & \textbf{5.3}\\
+PCA ($k=10$) & 39.1 & 32.5--45.3 & 52.6\\
+One Fisherface & \textbf{38.2} & 34.6--44.4 & \textbf{5.3}\\
 Always answer ``no'' & 50.0 & n/a & 50.0\\\bottomrule
 \end{tabular}
 \end{center}

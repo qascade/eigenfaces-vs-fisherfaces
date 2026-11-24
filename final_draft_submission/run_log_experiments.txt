@@ -30,8 +30,6 @@ loading Yale ... (slow)
    best m = 1000 at 69.8%; the paper uses m = 1482 giving 67.2%
 
 
-
-
 === E2: glasses vs no glasses (ORL) ===
    117 of 400 images wear glasses (29.2%)
    on the UNbalanced set, always answering "no" would score 70.8%,
@@ -39,8 +37,8 @@ loading Yale ... (slow)
    balanced subset: 234 images, 50.0% with glasses
 
    method            our error (mean of 10 draws)    paper (Yale, 36 images)
-   PCA, k = 10           43.1%  (37.2 to 48.3)        52.6%
-   one Fisherface        41.5%  (35.9 to 50.9)         5.3%
+   PCA, k = 10           39.1%  (32.5 to 45.3)        52.6%
+   one Fisherface        38.2%  (34.6 to 44.4)         5.3%
    always say "no"       50.0%                     50.0%
    Neither method works here, and the spread over draws is wide.
    We reproduce that PCA is near chance, but NOT that Fisherfaces

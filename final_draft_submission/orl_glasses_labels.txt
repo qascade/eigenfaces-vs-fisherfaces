@@ -1,6 +1,11 @@
 # ORL glasses labels, one row per subject s1..s40, one column per image 1..10.
 # 1 = wearing glasses, 0 = not.
 #
+# Column j describes the file named j.pgm.  Do NOT index this table by the
+# position an image happens to occupy after dir(), which sorts as text and
+# returns 1, 10, 2, 3, ... 9.  experiments.m reads the number out of the
+# filename for exactly this reason.
+#
 # These labels do NOT ship with ORL.  They were assigned by visually
 # inspecting all 400 images (montages at full resolution).  They are a
 # judgement call on a handful of borderline frames, so spot-check before
