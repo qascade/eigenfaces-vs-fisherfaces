@@ -12,6 +12,10 @@
 
 !sk/
 !sk/**
+!fisherfaces_project/
+!fisherfaces_project/**
+!final_submission/
+!final_submission/**
 !q1_matlab/
 !q1_matlab/**
 
@@ -28,3 +32,7 @@ datasets_for_viva.zip
 
 # report build artefacts
 submission.zip
+fisherfaces_project/*.aux
+fisherfaces_project/*.log
+fisherfaces_project/*.out
+fisherfaces_project/*.toc

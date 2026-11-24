@@ -1,0 +1,20 @@
+
+================ ORL ================
+d = 10304 pixels, N = 192 training, 128 test, c = 32 people
+Correlation (raw pixels):  accuracy = 91.41%
+Eigenfaces  (best k = 50): accuracy = 95.31%
+Eigenfaces  (k = c-1 = 31): accuracy = 94.53%
+Eigenfaces  w/o top 3 (k = 50): accuracy = 87.50%
+rank(S_B) = 31 (bound c-1 = 31), rank(S_W) = 160 (bound N-c = 160)
+FISHERFACES (31 dims):      accuracy = 90.62%
+
+================ Yale ================
+d = 32256 pixels, N = 1520 training, 894 test, c = 38 people
+Correlation (raw pixels):  accuracy = 42.95%
+Eigenfaces  (best k = 170): accuracy = 34.23%
+Eigenfaces  (k = c-1 = 37): accuracy = 29.53%
+Eigenfaces  w/o top 3 (k = 170): accuracy = 58.72%
+rank(S_B) = 37 (bound c-1 = 37), rank(S_W) = 1481 (bound N-c = 1482)
+FISHERFACES (37 dims):      accuracy = 67.23%
+
+figures saved to figures/
