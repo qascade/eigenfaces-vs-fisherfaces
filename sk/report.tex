@@ -106,13 +106,13 @@ Fisherfaces always use exactly $c-1$ features, so the $k=c-1$ column is the fair
 \textbf{Why Fisherfaces lose on ORL}, and they lose to raw-pixel correlation too. Eigenfaces never estimates $S_W$: it keeps the \emph{largest} eigenvalues of a well-estimated $S_T$. Fisherfaces must \emph{invert} $S_W$, so it leans on the \emph{smallest} eigenvalues, which are the worst estimated. ORL supplies only 5 degrees of freedom per person against Yale's 39.
 
 \begin{center}
-\includegraphics[width=0.49\textwidth]{figures/toy.png}\hfill
-\includegraphics[width=0.49\textwidth]{figures/ORL_faces.png}
-\captionof{figure}{Left: the 2-D toy problem. All the spread is along $x$ and all the class information along $y$, so PCA picks the useless direction (48.5\% error, chance 50\%) and Fisher the useful one (97.0\%). Right: ORL mean face, first eight eigenfaces and first eight Fisherfaces.}
+\includegraphics[width=0.95\textwidth]{figures/toy.png}\\[4pt]
+\includegraphics[width=0.88\textwidth]{figures/ORL_faces.png}
+\captionof{figure}{Top: the 2-D toy problem. All the spread is along $x$ and all the class information along $y$, so PCA picks the useless direction (48.5\% error, chance 50\%) and Fisher the useful one (97.0\%). Bottom: ORL mean face, first eight eigenfaces and first eight Fisherfaces.}
 \end{center}
 
 \begin{center}
-\includegraphics[width=0.78\textwidth]{figures/Yale_faces.png}
+\includegraphics[width=0.97\textwidth]{figures/Yale_faces.png}
 \captionof{figure}{Yale: eigenfaces are smooth and face-like, Fisherfaces are speckled and concentrate around the eyes and brow. This is predicted, not incidental: whitening scales each eigen-direction of $S_W$ by $1/\sqrt\lambda$, and the small-$\lambda$ directions are the high-frequency ones.}
 \end{center}
 
