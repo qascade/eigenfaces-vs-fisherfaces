@@ -68,4 +68,16 @@ loading Yale ... (slow)
    of pose, expression and session, so there is no clean signal.
 
 
+=== E5: error against lighting angle (Yale) ===
+   bin   angle          images   eigenfaces   Fisherfaces
+    1      0- 12 deg         0    (no test images)
+    2     12- 25 deg       104         1.0%         0.0%
+    3     25- 50 deg       152        30.9%         2.0%
+    4     50- 77 deg       300        88.3%        22.0%
+    5     77-180 deg       338        93.8%        66.3%
+   The first bin is EMPTY because dir sorts names as text and
+   '+' sorts before '-', so the training set swallowed all the
+   frontal lighting.  Every test image is at least 12 deg off axis.
+
+
 figures saved to figures/

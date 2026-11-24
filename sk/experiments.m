@@ -4,6 +4,7 @@
 % E2  label permutation: is the result real?
 % E3  choosing m by cross-validation, without peeking at the test set
 % E4  glasses vs no glasses (the paper's section 3.3)
+% E5  error against lighting angle (Yale)
 %
 % Notation follows the study guide: d pixels, N training images, c classes,
 % m the PCA dimension kept before LDA, S_W and S_B the scatter matrices.
@@ -264,6 +265,74 @@ ylabel('error rate (%)'); grid on;
 legend('mean error over 10 draws', 'always say no');
 title('Detecting glasses on a person never seen in training');
 saveas(gcf, [figDir 'E4_glasses.png']);
+
+
+%% E5. Error against lighting angle (Yale)
+% Every Yale filename encodes the light direction, e.g.
+%     yaleB01_P00A+020E-40.pgm  ->  azimuth +20, elevation -40
+% Azimuth and elevation are rotations about perpendicular axes, so the
+% direction cosine along the camera axis is the product of the cosines:
+%     theta = acos( cos(azimuth) * cos(elevation) )
+% The bins 0-12, 13-25, 26-50, 51-77 and above 77 degrees are the standard
+% subsets of the Yale B literature (Georghiades et al. 2001).
+
+fprintf('\n\n=== E5: error against lighting angle (Yale) ===\n');
+
+nTe = numel(yaleTestNames);
+theta = zeros(1, nTe);
+for i = 1:nTe
+    s  = yaleTestNames{i};
+    ia = strfind(s, 'A');             % uppercase A appears exactly once
+    ie = strfind(s, 'E');             % uppercase E appears exactly once
+    az = str2double(s(ia+1 : ie-1));
+    el = str2double(s(ie+1 : end-4)); % drop '.pgm'
+    theta(i) = acosd(cosd(az) * cosd(el));
+end
+
+angleBin = zeros(1, nTe);
+for i = 1:nTe
+    if     theta(i) <= 12, angleBin(i) = 1;
+    elseif theta(i) <= 25, angleBin(i) = 2;
+    elseif theta(i) <= 50, angleBin(i) = 3;
+    elseif theta(i) <= 77, angleBin(i) = 4;
+    else,                  angleBin(i) = 5;
+    end
+end
+
+yaleUmatched = yaleEigenfaces(:, 1:(yaleC-1));
+predEigen = nnPredict(yaleUmatched'*(yaleTrain-yaleMeanFace), yaleTrainLabels, yaleUmatched'*(yaleTest-yaleMeanFace));
+yaleFisherW = fisherfaces(yaleEigenfaces, yaleMeanFace, yaleTrain, yaleTrainLabels, yaleN-yaleC, yaleC);
+predFisher = nnPredict(yaleFisherW'*(yaleTrain-yaleMeanFace), yaleTrainLabels, yaleFisherW'*(yaleTest-yaleMeanFace));
+
+errEigen = nan(1,5); errFisher = nan(1,5); cnt = zeros(1,5);
+binLo = [0 12 25 50 77]; binHi = [12 25 50 77 180];
+fprintf('   bin   angle          images   eigenfaces   Fisherfaces\n');
+for b = 1:5
+    sel = (angleBin == b);
+    cnt(b) = sum(sel);
+    if cnt(b) == 0
+        fprintf('    %d    %3d-%3d deg         0    (no test images)\n', b, binLo(b), binHi(b));
+        continue;
+    end
+    errEigen(b) = 100 * sum(predEigen(sel) ~= yaleTestLabels(sel)) / cnt(b);
+    errFisher(b) = 100 * sum(predFisher(sel) ~= yaleTestLabels(sel)) / cnt(b);
+    fprintf('    %d    %3d-%3d deg     %5d   %9.1f%%  %10.1f%%\n', ...
+            b, binLo(b), binHi(b), cnt(b), errEigen(b), errFisher(b));
+end
+if cnt(1) == 0
+    fprintf('   The first bin is EMPTY because dir sorts names as text and\n');
+    fprintf('   ''+'' sorts before ''-'', so the training set swallowed all the\n');
+    fprintf('   frontal lighting.  Every test image is at least 12 deg off axis.\n');
+end
+
+figure('Position', [100 100 620 380]);
+bar([errEigen(:) errFisher(:)]);
+set(gca, 'XTickLabel', {'0-12','13-25','26-50','51-77','>77'});
+xlabel('angle of the light from the optical axis (degrees)');
+ylabel('error rate (%)'); grid on;
+legend('eigenfaces', 'Fisherfaces', 'Location', 'northwest');
+title('Yale: error grows with lighting angle');
+saveas(gcf, [figDir 'E5_lighting_angle.png']);
 
 
 fprintf('\n\nfigures saved to %s\n', figDir);

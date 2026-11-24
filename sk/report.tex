@@ -15,7 +15,7 @@
 \maketitle
 \vspace{-1.2em}
 
-We reproduced Belhumeur, Hespanha and Kriegman, ``Eigenfaces vs.\ Fisherfaces'' (IEEE TPAMI 1997) in MATLAB, confirmed its main claim on Yale, found where it fails (ORL), and ran four experiments of our own. Every number below is printed by the three submitted scripts and appears in the \texttt{run\_log} files.
+We reproduced Belhumeur, Hespanha and Kriegman, ``Eigenfaces vs.\ Fisherfaces'' (IEEE TPAMI 1997) in MATLAB, confirmed its main claim on Yale, found where it fails (ORL), and ran five experiments of our own. Every number below is printed by the three submitted scripts and appears in the \texttt{run\_log} files.
 
 \section{Problem and algorithm}
 The paper claims that Fisherfaces (PCA followed by LDA) recognise faces far more reliably than Eigenfaces (PCA) when lighting changes, because LDA uses the labels to discount variation within a person.
@@ -36,7 +36,7 @@ What varies & pose, expression, glasses & lighting only\\\bottomrule
 \end{center}
 The two databases are near-complements, so together they act as a controlled experiment.
 
-\textbf{What we implemented:} the Fisherfaces algorithm in full, plus three of the paper's four methods --- correlation, eigenfaces (including the ``drop the first three components'' variant) and Fisherfaces. \textbf{What we did not:} the Linear Subspace method of Section 2.3, which builds a separate 3-D illumination subspace per person. \textbf{Different data:} the paper's lighting experiment uses the Harvard database, which has no surviving public download, and its Yale set is a smaller 1997 database. Cropped Extended Yale B is by the same authors (2001) and is its successor, so our Yale comparison is \emph{modelled on} the paper's lighting experiment rather than a reproduction of it. Our glasses experiment uses ORL, where the paper used 36 paired Yale images --- a difference that turns out to matter.
+\textbf{What we implemented:} the Fisherfaces algorithm in full, plus three of the paper's four methods --- correlation, eigenfaces (including the ``drop the first three components'' variant) and Fisherfaces. \textbf{What we did not:} the Linear Subspace method of Section 2.3, which builds a separate 3-D illumination subspace per person. \textbf{Different data:} the paper's lighting experiment uses the Harvard database, which has no surviving public download, and its Yale set is a smaller 1997 database. Cropped Extended Yale B is the successor of that set --- the 38-subject extension is due to Lee, Ho and Kriegman (TPAMI 2005), Kriegman being an author of the 1997 paper, and the 10-subject Yale B before it to Georghiades, Belhumeur and Kriegman (TPAMI 2001) --- so our Yale comparison is \emph{modelled on} the paper's lighting experiment rather than a reproduction of it. Our glasses experiment uses ORL, where the paper used 36 paired Yale images --- a difference that turns out to matter.
 
 \section{The mathematics}
 Each image is flattened column-by-column into $x_i\in\mathbb R^d$. There are $N$ training images in $c$ classes; class $j$ has $n_j$ images and mean $\mu_j$, and $\mu$ is the overall mean.
@@ -68,7 +68,7 @@ The paper specifies none of this --- it says only ``the generalized eigenvectors
 \textbf{One step that is easy to miss.} \texttt{eig(Sb,Sw)} returns columns with $W\T S_WW=I$: they are $S_W$-orthogonal, \emph{not} Euclidean-orthogonal, and their ordinary lengths differ by a factor of 287 here. $J$ does not care, because it is scale-invariant, but 1-NN with Euclidean distance does --- a long basis vector dominates every distance. Normalising each Fisherface to unit length is therefore not cosmetic: without it Fisherfaces score \textbf{29.5\%} on ORL, with it \textbf{90.6\%}. Same subspace, same eigenvalues, only the basis lengths differ. This was a real bug in our first implementation.
 
 \section{Implementation}
-Three scripts, each with its helper functions at the bottom: \texttt{toy.m} (the 2-D demonstration), \texttt{eigenfaces\_vs\_fisherfaces.m} (the main comparison) and \texttt{experiments.m} (E1--E4). Base MATLAB only, no toolboxes.
+Three scripts, each with its helper functions at the bottom: \texttt{toy.m} (the 2-D demonstration), \texttt{eigenfaces\_vs\_fisherfaces.m} (the main comparison) and \texttt{experiments.m} (E1--E5). Base MATLAB only, no toolboxes.
 
 \textbf{Eigenfaces.} Load and flatten with \texttt{im(:)}; centre on the mean face; form $L=X\T X$; \texttt{eig} and sort \emph{descending} (MATLAB returns ascending); map back $V=XW$ and normalise each column; drop the last (eigenvalue 0, since $\operatorname{rank}X\le N-1$); project with $V_k$ and classify by 1-NN on squared distance, with test images centred on the \emph{training} mean.
 
@@ -188,13 +188,33 @@ Always answer ``no'' & 50.0 & --- & 50.0\\\bottomrule
 \captionof{figure}{Mean error over ten balanced draws on a person never seen in training; the dashed line is the 50\% a coin achieves.}
 \end{center}
 
+\subsection{E5 --- Error against lighting angle}
+The paper does not report one Yale number; it bins the test images by how far the lamp is from the camera axis. Yale filenames encode the direction, e.g.\ \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$. Azimuth and elevation are rotations about perpendicular axes, so the direction cosine along the camera axis is the product of the cosines and $\theta=\arccos(\cos\mathrm{az}\cdot\cos\mathrm{el})$. The five bins below are the standard subsets of the Yale B literature.
+\begin{center}
+\begin{tabular}{lccccc}\toprule
+Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
+Test images & 0 & 104 & 152 & 300 & 338\\\midrule
+Eigenfaces & --- & 1.0 & 30.9 & 88.3 & 93.8\\
+Fisherfaces & --- & \textbf{0.0} & \textbf{2.0} & \textbf{22.0} & \textbf{66.3}\\\bottomrule
+\end{tabular}
+\end{center}
+Error climbs with angle for both methods and the gap \emph{widens}: at $26$--$50^\circ$ Fisherfaces are $15\times$ better, and even in the hardest bin they halve the error. This is the paper's central claim measured where it bites rather than averaged into one number.
+
+\textbf{The empty first bin is itself a finding.} Lighting is encoded as \texttt{A+020}/\texttt{A-020} and \texttt{dir} sorts names as text, where \texttt{'+'} precedes \texttt{'-'}. Taking the first 40 files per subject therefore puts every near-frontal lamp into training: \emph{every} test image is at least $12^\circ$ off axis and 638 of the 894 are beyond $50^\circ$. The test set is not a random sample of lighting, it is the hard tail of one, which is why the headline Yale figures look so poor.
+
+\textbf{A caveat on the hardest bin.} Beyond roughly $60^\circ$ a large part of the face is in cast shadow, and the $\max(n\T s,0)$ term that the 3-D illumination subspace argument discards is exactly what produces those shadows. So the last two bins stress a regime the underlying theory does not cover, and the task drifts from recognition under illumination towards recognition from a partly visible face.
+\begin{center}
+\includegraphics[width=0.56\textwidth]{figures/E5_lighting_angle.png}
+\captionof{figure}{Error against lighting angle. The first bin is a gap, not a zero bar, because it holds no test images.}
+\end{center}
+
 \section{Conclusions}
 \begin{enumerate}
-\item \textbf{The paper's claim holds where the within-person nuisance is large and structured.} Under lighting change Fisherfaces take Yale from 34.23\% to 67.23\%, nearly doubling the recognition rate, and they beat every other method we implemented there.
+\item \textbf{The paper's claim holds where the within-person nuisance is large and structured.} Under lighting change Fisherfaces take Yale from 34.23\% to 67.23\%, nearly doubling the recognition rate, and are $15\times$ better than Eigenfaces in the $26$--$50^\circ$ bin.
 \item \textbf{It is a claim about nuisance structure, not ``LDA is always better''.} On ORL --- pose and expression, 6 images per person --- Eigenfaces win, and Fisherfaces lose even to raw-pixel correlation. What decides the outcome is how much \emph{structured} within-class variation there is for LDA to discount, not the algorithm.
 \item \textbf{$m=N-c$ is the weakest part of the recipe.} It is the worst-conditioned valid choice, and a smaller $m$ does better on both databases. The blow-up at $\gamma\to1$ is predicted by Marchenko--Pastur, so this is not a quirk of our data.
 \item \textbf{Our honest ORL accuracy is 93.0\%, not 95.3\%.} The difference is whether $m$ was chosen by cross-validation or by looking at the test set.
-\item \textbf{Protocol mattered as much as the algorithm.} \texttt{dir} sorts filenames as text and \texttt{'+'} precedes \texttt{'-'}, so taking the first 40 Yale files per subject puts the near-frontal lamps in training and the extreme ones in test --- the headline Yale rates are measured on the hard tail of the lighting distribution, not a sample of it. And what looked like a broken method was not one: Fisherfaces at 29.5\% was a missing unit-norm step on the columns of $W$.
+\item \textbf{Protocol mattered as much as the algorithm.} The text-sorted Yale split puts every frontal lamp in training and every hard one in test, and two things that looked like failures were not: Fisherfaces at 29.5\% was a missing unit-norm step, and the empty $0$--$12^\circ$ bin is that sorting accident, not a parsing bug.
 \end{enumerate}
 
 \end{document}
