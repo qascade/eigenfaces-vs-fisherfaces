@@ -30,15 +30,7 @@ loading Yale ... (slow)
    best m = 1000 at 69.8%; the paper uses m = 1482 giving 67.2%
 
 
-=== E2: label permutation (ORL) ===
-                 true labels   shuffled
-  eigenfaces         94.5%        0.8%
-  Fisherfaces        90.6%        0.0%
-  chance = 100/c      3.1%
-  Both collapse, so the real numbers come from the faces.
-
-
-=== E3: cross-validated m (ORL) ===
+=== E2: cross-validated m (ORL) ===
    m =  31   cross-validated =  95.3%
    m =  40   cross-validated =  97.4%
    m =  60   cross-validated =  96.9%
@@ -51,7 +43,7 @@ loading Yale ... (slow)
    the 2.3 point gap is the optimism avoided by not peeking
 
 
-=== E4: glasses vs no glasses (ORL) ===
+=== E3: glasses vs no glasses (ORL) ===
    117 of 400 images wear glasses (29.2%)
    on the UNbalanced set, always answering "no" would score 70.8%,
    which beats any real method -- hence the balancing below.
@@ -68,7 +60,7 @@ loading Yale ... (slow)
    of pose, expression and session, so there is no clean signal.
 
 
-=== E5: error against lighting angle (Yale) ===
+=== E4: error against lighting angle (Yale) ===
    bin   angle          images   eigenfaces   Fisherfaces
     1      0- 12 deg         0    (no test images)
     2     12- 25 deg       104         1.0%         0.0%

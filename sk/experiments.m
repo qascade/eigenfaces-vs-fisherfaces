@@ -1,10 +1,9 @@
 %% Experiments on top of eigenfaces_vs_fisherfaces.m
 %
 % E1  sweeping the PCA dimension m, with cond(S_W)   (study guide, section 24)
-% E2  label permutation: is the result real?
-% E3  choosing m by cross-validation, without peeking at the test set
-% E4  glasses vs no glasses (the paper's section 3.3)
-% E5  error against lighting angle (Yale)
+% E2  choosing m by cross-validation, without peeking at the test set
+% E3  glasses vs no glasses (the paper's section 3.3)
+% E4  error against lighting angle (Yale)
 %
 % Notation follows the study guide: d pixels, N training images, c classes,
 % m the PCA dimension kept before LDA, S_W and S_B the scatter matrices.
@@ -85,48 +84,13 @@ for db = 1:2
 end
 
 
-%% E2. Label permutation
-% Shuffle the TRAINING labels and change nothing else.  Now no face has any
-% relation to its label, so nothing can beat guessing, which is 100/c.
-% A method still scoring well would mean the pipeline is leaking.
-
-fprintf('\n\n=== E2: label permutation (ORL) ===\n');
-
-Umatched = orlEigenfaces(:, 1:(orlC-1));
-rateEigen = nnRate(Umatched'*(orlTrain-orlMeanFace), orlTrainLabels, Umatched'*(orlTest-orlMeanFace), orlTestLabels);
-fisherW  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, orlN-orlC, orlC);
-rateFisher = nnRate(fisherW'*(orlTrain-orlMeanFace), orlTrainLabels, fisherW'*(orlTest-orlMeanFace), orlTestLabels);
-
-rng('default');                       % so this experiment does not depend on what ran before
-shuffledLabels = orlTrainLabels(randperm(orlN));
-rateEigenShuffled = nnRate(Umatched'*(orlTrain-orlMeanFace), shuffledLabels, Umatched'*(orlTest-orlMeanFace), orlTestLabels);
-fisherWshuffled  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, shuffledLabels, orlN-orlC, orlC);
-rateFisherShuffled = nnRate(fisherWshuffled'*(orlTrain-orlMeanFace), shuffledLabels, fisherWshuffled'*(orlTest-orlMeanFace), orlTestLabels);
-
-chance = 100 / orlC;
-fprintf('                 true labels   shuffled\n');
-fprintf('  eigenfaces       %6.1f%%     %6.1f%%\n', rateEigen, rateEigenShuffled);
-fprintf('  Fisherfaces      %6.1f%%     %6.1f%%\n', rateFisher, rateFisherShuffled);
-fprintf('  chance = 100/c   %6.1f%%\n', chance);
-fprintf('  Both collapse, so the real numbers come from the faces.\n');
-
-figure('Position', [100 100 560 360]);
-bar([rateEigen rateEigenShuffled; rateFisher rateFisherShuffled]); hold on;
-plot([0.5 2.5], [chance chance], 'k--', 'LineWidth', 1.2); hold off;
-set(gca, 'XTickLabel', {'eigenfaces','Fisherfaces'});
-ylabel('accuracy (%)'); grid on;
-legend('true labels', 'shuffled', 'chance');
-title('Shuffling the training labels destroys both methods');
-saveas(gcf, [figDir 'E2_label_permutation.png']);
-
-
-%% E3. Choosing m by cross-validation
+%% E2. Choosing m by cross-validation
 % E1 read "the best m" off the test column, which is tuning on the test set.
 % The honest way is 6-fold leave-one-out INSIDE the training set: train on 5
 % images per person, validate on the held-out 1, rotate, average.  The PCA
 % basis is recomputed per fold, otherwise the validation image leaks into it.
 
-fprintf('\n\n=== E3: cross-validated m (ORL) ===\n');
+fprintf('\n\n=== E2: cross-validated m (ORL) ===\n');
 
 msCV = [31 40 60 80 100 120];
 cvRate  = zeros(1, numel(msCV));
@@ -170,11 +134,11 @@ xlabel('m'); ylabel('accuracy (%)');
 legend('cross-validated (honest)', 'test set (peeking)', 'm chosen by CV', ...
        'Location', 'southwest');
 title('Choosing m with and without looking at the test set');
-saveas(gcf, [figDir 'E3_cross_validation.png']);
+saveas(gcf, [figDir 'E2_cross_validation.png']);
 
 
 
-%% E4. Glasses vs no glasses (the paper's section 3.3)
+%% E3. Glasses vs no glasses (the paper's section 3.3)
 % A different question: not WHO is this, but IS THIS PERSON WEARING GLASSES.
 % Two classes, so rank(S_B) <= 1 and there is exactly ONE Fisherface.
 %
@@ -190,7 +154,7 @@ saveas(gcf, [figDir 'E3_cross_validation.png']);
 % beats everything) and leave one SUBJECT out at a time, so the test face is
 % never seen in training and the classifier cannot cheat by recognising it.
 
-fprintf('\n\n=== E4: glasses vs no glasses (ORL) ===\n');
+fprintf('\n\n=== E3: glasses vs no glasses (ORL) ===\n');
 
 G = readGlasses('orl_glasses_labels.txt');
 [allImages, allSubjects] = loadFaces(orlDir, 40, 10, 112*92);
@@ -264,10 +228,10 @@ set(gca, 'XTickLabel', {'PCA (k=10)', 'one Fisherface'});
 ylabel('error rate (%)'); grid on;
 legend('mean error over 10 draws', 'always say no');
 title('Detecting glasses on a person never seen in training');
-saveas(gcf, [figDir 'E4_glasses.png']);
+saveas(gcf, [figDir 'E3_glasses.png']);
 
 
-%% E5. Error against lighting angle (Yale)
+%% E4. Error against lighting angle (Yale)
 % Every Yale filename encodes the light direction, e.g.
 %     yaleB01_P00A+020E-40.pgm  ->  azimuth +20, elevation -40
 % Azimuth and elevation are rotations about perpendicular axes, so the
@@ -276,7 +240,7 @@ saveas(gcf, [figDir 'E4_glasses.png']);
 % The bins 0-12, 13-25, 26-50, 51-77 and above 77 degrees are the standard
 % subsets of the Yale B literature (Georghiades et al. 2001).
 
-fprintf('\n\n=== E5: error against lighting angle (Yale) ===\n');
+fprintf('\n\n=== E4: error against lighting angle (Yale) ===\n');
 
 nTe = numel(yaleTestNames);
 theta = zeros(1, nTe);
@@ -332,7 +296,7 @@ xlabel('angle of the light from the optical axis (degrees)');
 ylabel('error rate (%)'); grid on;
 legend('eigenfaces', 'Fisherfaces', 'Location', 'northwest');
 title('Yale: error grows with lighting angle');
-saveas(gcf, [figDir 'E5_lighting_angle.png']);
+saveas(gcf, [figDir 'E4_lighting_angle.png']);
 
 
 fprintf('\n\nfigures saved to %s\n', figDir);
