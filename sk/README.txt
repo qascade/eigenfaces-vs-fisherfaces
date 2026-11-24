@@ -4,8 +4,8 @@ Submission: code, report, study guide, figures.  Databases are NOT included.
 SUBMITTED CODE  (base MATLAB only, no toolboxes)
   toy.m                        the 2-D problem: why PCA is not a classifier
   eigenfaces_vs_fisherfaces.m  the four-method comparison on ORL and Yale
-  experiments.m                experiments E1 to E4
-  figures/                     the eight figures the scripts draw
+  experiments.m                experiments E1 to E3
+  figures/                     the seven figures the scripts draw
 
 DOCUMENTS
   report.pdf        the project report      (report.tex is the source)
@@ -15,7 +15,7 @@ DOCUMENTS
 
 SUPPORTING
   orl_glasses_labels.txt   glasses labels for ORL, made by visual inspection,
-                           needed by experiment E3
+                           needed by experiment E2
   rename_yale.sh           one-time Yale folder rename, see below
   reference_code/          earlier code this submission was built from:
                              hw3_baseline_pca.m                 the HW3 PCA baseline

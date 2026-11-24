@@ -24,7 +24,7 @@
 
 This guide covers the submission: the three scripts \texttt{toy.m},
 \texttt{eigenfaces\_vs\_}\allowbreak\texttt{fisherfaces.m} and
-\texttt{experiments.m}, and the four experiments E1--E4. For each piece it
+\texttt{experiments.m}, and the three experiments E1--E3. For each piece it
 gives the theory, the code that implements it, and what can be asked about it.
 Two sections go beyond the code because the viva will: why lighting is the hard
 case, and Face-ARG matching as a structural alternative to everything we built.
@@ -89,7 +89,7 @@ coordinates.
 file & runs & produces\\\midrule
 \texttt{toy.m} & the 2-D demonstration & \texttt{toy.png}\\
 \texttt{eigenfaces\_vs\_fisherfaces.m} & the four-method comparison & main table, two face montages\\
-\texttt{experiments.m} & E1--E4 & five figures\\\bottomrule
+\texttt{experiments.m} & E1--E3 & four figures\\\bottomrule
 \end{tabular}
 \end{center}
 
@@ -408,21 +408,7 @@ into the intrinsic conditioning of the true $S_W$ (about 9) times the sampling
 inflation. So the blow-up is a predictable sampling artefact, not a quirk of
 faces.
 
-\subsection{E2 --- cross-validated $m$}
-\textbf{Question.} E1 read ``the best $m$'' off the test column. That is tuning
-on test. What is the honest number?
-
-Six-fold leave-one-out inside the training set, with the PCA basis recomputed
-per fold so the validation image cannot leak into it. CV picks $m=40$, scoring
-$93.0\%$; tuning on test would pick $m=60$ for $95.3\%$.
-
-\textbf{The 2.3-point gap is the optimism avoided.} Note the CV rates sit
-\emph{above} the test rates, which is consistent rather than contradictory: the
-validation images come from the same six-image pool as the training images, an
-easier problem. CV is used to \emph{rank} values of $m$, not to estimate the
-final accuracy.
-
-\subsection{E3 --- glasses or no glasses}
+\subsection{E2 --- glasses or no glasses}
 A different question, and the paper's Section 3.3: not \emph{who} is this but
 \emph{is this person wearing glasses}. With $c=2$,
 $\operatorname{rank}S_B\le1$ and there is exactly \textbf{one} Fisherface,
@@ -457,7 +443,7 @@ glasses in one session --- so glasses were the only thing that changed. In ORL
 glasses co-vary with pose, expression and session, so one direction has no
 clean signal to lock onto.
 
-\subsection{E4 --- error against lighting angle}
+\subsection{E3 --- error against lighting angle}
 \textbf{Question.} The paper does not quote one Yale number; it bins the test
 images by $\theta$, the angle of the lamp off the optical axis, computed by
 equation \eqref{eq:theta}.
@@ -781,22 +767,26 @@ features.
   break if it were. The rank bounds come out exactly as predicted and are
   printed every run ($\operatorname{rank}S_B=31=c-1$ on ORL, $37$ on Yale). The
   drop-3 result flips sign between the two databases in the direction the
-  theory predicts, which a leak would not reproduce. And the cross-validated
-  estimate ($93.0\%$) is \emph{lower} than the test figure, the wrong direction
-  for a pipeline that was seeing the test labels.
+  theory predicts, which a leak would not reproduce. And the label permutation
+  we ran while developing took both methods to chance or below, which is the
+  check to describe if pressed, though that experiment is not in the final
+  submission.
 \end{description}
 
 \subsection{Protocol and honesty}
 \begin{description}[style=nextline,leftmargin=0pt]
-\item[Is $95.3\%$ your real ORL accuracy?] No. That is the best $m$ chosen by
-  looking at the test set. Cross-validated, $m=40$ gives $93.0\%$, and the
-  2.3-point gap is the optimism. $93.0\%$ is the honest figure.
+\item[Is $95.3\%$ your real ORL accuracy?] Treat it as an upper bound, not an
+  estimate. It is the peak of the E1 sweep, and the peak was read off the test
+  column, which is tuning on test. An honest figure needs $m$ chosen inside the
+  training set, by cross-validation; we are not quoting one, so the right answer
+  is that $95.3\%$ is optimistic by an unmeasured amount. The direction of the
+  bias is certain even though its size is not.
 \item[Why are the Yale numbers so low?] The split. \texttt{dir} sorts names as
   text and \texttt{'+'} precedes \texttt{'-'}, so all 35 \texttt{A+} files sort
   ahead of the 29 \texttt{A-} files. Taking the first 40 per subject therefore
   puts every near-frontal lamp in training and leaves the extreme angles for
   testing --- every test image is at least $12^\circ$ off axis and 638 of 894
-  beyond $50^\circ$ (E4). The Yale rates are measured on the hard tail of the
+  beyond $50^\circ$ (E3). The Yale rates are measured on the hard tail of the
   lighting distribution, not on a sample of it.
 \item[What did you not implement?] The Linear Subspace method of the paper's
   Section 2.3, which builds a 3-D illumination subspace per person.
@@ -811,7 +801,7 @@ features.
   author common to all three papers. The glasses experiment uses ORL, where the
   paper used 36 paired Yale images --- a difference that turns out to matter.
 \item[Anything that did not come out as the paper says?] Two things, and the
-  report says so. E3: we reproduce that PCA is near chance on glasses but not
+  report says so. E2: we reproduce that PCA is near chance on glasses but not
   that Fisherfaces solve it ($41.5\%$ error against their $5.3\%$), because
   their images were paired and ORL's are not. And on ORL Fisherfaces lose to
   eigenfaces, $90.62\%$ against $95.31\%$,
@@ -831,7 +821,6 @@ ORL: eigenfaces $\to$ Fisherfaces & $95.31\% \to 90.62\%$\\
 Drop top 3 on Yale (helps) & $34.23\% \to 58.72\%$\\
 Drop top 3 on ORL (hurts) & $95.31\% \to 87.50\%$\\
 Fisherfaces without unit-norming & $90.6\% \to 29.5\%$\\
-Honest ORL accuracy (cross-validated) & $93.0\%$, not $95.3\%$\\
 Best $m$ vs the paper's $N-c$ (ORL) & $60$ vs $160$; $95.3$ vs $90.6$\\
 $\kappa(S_W)$ at $m=N-c$ & $7.9\times10^{7}$ (ORL), $6.0\times10^{12}$ (Yale)\\
 Number of Fisherfaces & exactly $c-1$, every $c$ tested\\

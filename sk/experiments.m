@@ -1,9 +1,8 @@
 %% Experiments on top of eigenfaces_vs_fisherfaces.m
 %
 % E1  sweeping the PCA dimension m, with cond(S_W)   (study guide, section 24)
-% E2  choosing m by cross-validation, without peeking at the test set
-% E3  glasses vs no glasses (the paper's section 3.3)
-% E4  error against lighting angle (Yale)
+% E2  glasses vs no glasses (the paper's section 3.3)
+% E3  error against lighting angle (Yale)
 %
 % Notation follows the study guide: d pixels, N training images, c classes,
 % m the PCA dimension kept before LDA, S_W and S_B the scatter matrices.
@@ -50,7 +49,10 @@ fprintf('\n\n=== E1: sweeping m (study guide section 24) ===\n');
 
 for db = 1:2
     if db == 1
-        dbName = 'ORL';  U = orlEigenfaces; meanIm = orlMeanFace; trainIm = orlTrain; trainLab = orlTrainLabels; testIm = orlTest; testLab = orlTestLabels;
+        dbName = 'ORL'; 
+        U = orlEigenfaces; meanIm = orlMeanFace; 
+        trainIm = orlTrain; trainLab = orlTrainLabels; 
+        testIm = orlTest; testLab = orlTestLabels;
         c = orlC; N = orlN;  ms = [31 40 60 80 100 120 140 160];
     else
         dbName = 'Yale'; U = yaleEigenfaces; meanIm = yaleMeanFace; trainIm = yaleTrain; trainLab = yaleTrainLabels; testIm = yaleTest; testLab = yaleTestLabels;
@@ -84,61 +86,8 @@ for db = 1:2
 end
 
 
-%% E2. Choosing m by cross-validation
-% E1 read "the best m" off the test column, which is tuning on the test set.
-% The honest way is 6-fold leave-one-out INSIDE the training set: train on 5
-% images per person, validate on the held-out 1, rotate, average.  The PCA
-% basis is recomputed per fold, otherwise the validation image leaks into it.
 
-fprintf('\n\n=== E2: cross-validated m (ORL) ===\n');
-
-msCV = [31 40 60 80 100 120];
-cvRate  = zeros(1, numel(msCV));
-for i = 1:numel(msCV)
-    total = 0;
-    for f = 1:6
-        isVal = false(1, orlN);
-        for p = 1:orlC
-            cols = find(orlTrainLabels == p);
-            isVal(cols(f)) = true;
-        end
-        foldTrain = orlTrain(:, ~isVal);  foldTrainLabels = orlTrainLabels(~isVal);
-        foldVal = orlTrain(:,  isVal);  foldValLabels = orlTrainLabels( isVal);
-        [foldEigenfaces, meanIm] = doPCA(foldTrain);
-        foldFisherW = fisherfaces(foldEigenfaces, meanIm, foldTrain, foldTrainLabels, msCV(i), orlC);
-        total = total + nnRate(foldFisherW'*(foldTrain-meanIm), foldTrainLabels, foldFisherW'*(foldVal-meanIm), foldValLabels);
-    end
-    cvRate(i) = total / 6;
-    fprintf('   m = %3d   cross-validated = %5.1f%%\n', msCV(i), cvRate(i));
-end
-
-testRate = zeros(1, numel(msCV));
-for i = 1:numel(msCV)
-    testFisherW = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, msCV(i), orlC);
-    testRate(i) = nnRate(testFisherW'*(orlTrain-orlMeanFace), orlTrainLabels, testFisherW'*(orlTest-orlMeanFace), orlTestLabels);
-end
-[~, iCV] = max(cvRate);
-[bT, iT] = max(testRate);
-fprintf('\n   CV picks m = %d, which scores %.1f%% on the test set\n', ...
-        msCV(iCV), testRate(iCV));
-fprintf('   tuning on test would pick m = %d for %.1f%%\n', msCV(iT), bT);
-fprintf('   the %.1f point gap is the optimism avoided by not peeking\n', ...
-        bT - testRate(iCV));
-
-figure('Position', [100 100 600 380]);
-plot(msCV, cvRate, '-o', 'LineWidth', 1.5); hold on;
-plot(msCV, testRate, '-s', 'LineWidth', 1.5);
-plot(msCV(iCV), testRate(iCV), 'kp', 'MarkerSize', 14, 'MarkerFaceColor', 'y');
-hold off; grid on;
-xlabel('m'); ylabel('accuracy (%)');
-legend('cross-validated (honest)', 'test set (peeking)', 'm chosen by CV', ...
-       'Location', 'southwest');
-title('Choosing m with and without looking at the test set');
-saveas(gcf, [figDir 'E2_cross_validation.png']);
-
-
-
-%% E3. Glasses vs no glasses (the paper's section 3.3)
+%% E2. Glasses vs no glasses (the paper's section 3.3)
 % A different question: not WHO is this, but IS THIS PERSON WEARING GLASSES.
 % Two classes, so rank(S_B) <= 1 and there is exactly ONE Fisherface.
 %
@@ -154,7 +103,7 @@ saveas(gcf, [figDir 'E2_cross_validation.png']);
 % beats everything) and leave one SUBJECT out at a time, so the test face is
 % never seen in training and the classifier cannot cheat by recognising it.
 
-fprintf('\n\n=== E3: glasses vs no glasses (ORL) ===\n');
+fprintf('\n\n=== E2: glasses vs no glasses (ORL) ===\n');
 
 G = readGlasses('orl_glasses_labels.txt');
 [allImages, allSubjects] = loadFaces(orlDir, 40, 10, 112*92);
@@ -228,10 +177,10 @@ set(gca, 'XTickLabel', {'PCA (k=10)', 'one Fisherface'});
 ylabel('error rate (%)'); grid on;
 legend('mean error over 10 draws', 'always say no');
 title('Detecting glasses on a person never seen in training');
-saveas(gcf, [figDir 'E3_glasses.png']);
+saveas(gcf, [figDir 'E2_glasses.png']);
 
 
-%% E4. Error against lighting angle (Yale)
+%% E3. Error against lighting angle (Yale)
 % Every Yale filename encodes the light direction, e.g.
 %     yaleB01_P00A+020E-40.pgm  ->  azimuth +20, elevation -40
 % Azimuth and elevation are rotations about perpendicular axes, so the
@@ -240,7 +189,7 @@ saveas(gcf, [figDir 'E3_glasses.png']);
 % The bins 0-12, 13-25, 26-50, 51-77 and above 77 degrees are the standard
 % subsets of the Yale B literature (Georghiades et al. 2001).
 
-fprintf('\n\n=== E4: error against lighting angle (Yale) ===\n');
+fprintf('\n\n=== E3: error against lighting angle (Yale) ===\n');
 
 nTe = numel(yaleTestNames);
 theta = zeros(1, nTe);
@@ -296,7 +245,7 @@ xlabel('angle of the light from the optical axis (degrees)');
 ylabel('error rate (%)'); grid on;
 legend('eigenfaces', 'Fisherfaces', 'Location', 'northwest');
 title('Yale: error grows with lighting angle');
-saveas(gcf, [figDir 'E4_lighting_angle.png']);
+saveas(gcf, [figDir 'E3_lighting_angle.png']);
 
 
 fprintf('\n\nfigures saved to %s\n', figDir);
