@@ -1,0 +1,528 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=0.9in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,xcolor,array}
+\usepackage[hidelinks]{hyperref}
+\usepackage{listings}
+\usepackage{caption}
+\setlength{\parindent}{0pt}\setlength{\parskip}{5pt}
+\setlist{itemsep=2pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.2}
+\newcommand{\T}{^{\top}}
+
+\lstset{basicstyle=\ttfamily\small,breaklines=true,frame=single,framesep=4pt,
+        backgroundcolor=\color{gray!8},columns=fullflexible,keepspaces=true,
+        aboveskip=6pt,belowskip=6pt}
+
+\title{\textbf{Eigenfaces vs Fisherfaces: Viva Study Guide}\\[3pt]
+\large The submitted code and experiments}
+\author{CS 740}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-1.3em}
+
+This guide covers only what is in the submission: the three scripts
+\texttt{toy.m}, \texttt{eigenfaces\_vs\_}\allowbreak\texttt{fisherfaces.m} and
+\texttt{experiments.m}, and the seven experiments E1--E7. For each piece it
+gives the theory, the code that implements it, and what can be asked about it.
+
+{\small\tableofcontents}
+
+\vspace{6pt}\hrule
+
+\section{The idea in one page}
+
+Both methods turn a face image of thousands of pixels into a short list of
+numbers, then recognise a new face by finding the nearest training face in that
+short list. They differ in \emph{which} short list.
+
+\textbf{PCA (Eigenfaces)} keeps the directions in which the images vary most.
+It never looks at the labels. That is the whole problem: in face images the
+biggest variation is often \emph{not} who the person is. Change the lighting on
+one face and the pixels change far more than they do between two different
+people under the same lamp. PCA faithfully keeps the lighting.
+
+\textbf{LDA (Fisherfaces)} uses the labels. It looks for directions where the
+class \emph{means} are far apart relative to the scatter \emph{within} each
+class. Variation that happens inside a single person --- their own lighting,
+their own expressions --- is exactly what it tries to divide out.
+
+So the one-sentence claim of the paper is: \emph{when the nuisance variation
+within a person is large, supervision is worth a great deal.} Our Yale result
+(34.23\% $\to$ 67.23\%) confirms it and our ORL result (95.31\% $\to$ 90.62\%)
+shows the other side: when the within-person variation is small and
+unstructured, LDA's extra machinery costs more than it earns.
+
+\section{Notation}
+
+\begin{center}
+\begin{tabular}{cll}\toprule
+symbol & meaning & value in the submission\\\midrule
+$d$ & pixels per image & ORL $10{,}304$, Yale $32{,}256$\\
+$N$ & training images & ORL $192$, Yale $1520$\\
+$c$ & classes (people) & ORL $32$, Yale $38$\\
+$n_j$ & training images of person $j$ & ORL $6$, Yale $40$\\
+$m$ & PCA dimension kept before LDA & swept in E1\\
+$x_i$ & one image as a column & $x_i\in\mathbb R^{d}$\\
+$\mu$, $\mu_j$ & overall mean, class-$j$ mean & \\
+$X$ & centred training images as columns & $d\times N$\\
+$U$ & eigenfaces as columns & $d\times(N-1)$\\
+$W_{opt}$ & Fisherfaces as columns & $d\times(c-1)$\\
+$S_T,S_B,S_W$ & total, between-class, within-class scatter & \\
+$J(w)$ & Fisher criterion $\dfrac{w\T S_Bw}{w\T S_Ww}$ & \\\bottomrule
+\end{tabular}
+\end{center}
+
+An image is flattened \emph{column by column} into a vector. This throws away
+the fact that neighbouring pixels are adjacent, which is fine because every
+image is flattened the same way, so corresponding pixels land in corresponding
+coordinates.
+
+\section{What each script does}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{5.1cm}p{4.0cm}p{5.2cm}@{}}\toprule
+file & runs & produces\\\midrule
+\texttt{toy.m} & the 2-D demonstration & \texttt{toy.png}\\
+\texttt{eigenfaces\_vs\_fisherfaces.m} & the four-method comparison & main table, two face montages\\
+\texttt{experiments.m} & E1--E7 & eight figures\\\bottomrule
+\end{tabular}
+\end{center}
+
+Each is a plain script with its helper functions at the bottom. MATLAB requires
+a script's functions to come after all executable code, and those functions
+cannot be seen by any other script --- which is why each file carries its own
+copy.
+
+\section{The toy problem (\texttt{toy.m})}
+
+\textbf{Why it exists.} To make the difference visible in two dimensions, where
+you can check the answer by eye.
+
+Two classes share the covariance $\Sigma=\mathrm{diag}(16,\,0.25)$ and their
+means differ only in $y$. So the standard deviation along $x$ is $4$ and along
+$y$ is $0.5$: \emph{all the spread is along $x$ and all the class information
+is along $y$}. It is a trap built for PCA.
+
+\begin{lstlisting}
+X1 = [4*randn(1, n); 0.5*randn(1, n) + 1];
+X2 = [4*randn(1, n); 0.5*randn(1, n) - 1];
+Sw = (X1 - m1)*(X1 - m1)' + (X2 - m2)*(X2 - m2)';
+w  = Sw \ (m1 - m2);
+w  = w / norm(w);
+\end{lstlisting}
+
+\textbf{The maths.} For two classes the maximiser of $J$ has a closed form.
+Write $\delta=\mu_1-\mu_2$. Then $S_B=\tfrac n2\delta\delta\T$, so
+$w\T S_Bw=\tfrac n2(\delta\T w)^2$, and maximising that subject to
+$w\T S_Ww=1$ with a Lagrange multiplier gives
+\[ 2(\delta\T w)\delta=2\lambda S_Ww\quad\Longrightarrow\quad w\propto S_W^{-1}(\mu_1-\mu_2). \]
+The leading factor is a scalar, and $J$ is scale-invariant (numerator and
+denominator are both quadratic in $w$), so we are free to normalise $w$.
+
+\textbf{Result.} LDA picks $(-0.004,\,1.000)$ --- essentially the $y$-axis ---
+and gets $97.5\%$. PCA picks $(-1.000,\,-0.001)$, the $x$-axis, and gets
+$48.5\%$, where chance is $50\%$.
+
+\textbf{Syntax worth knowing.} \verb|Sw \ (m1-m2)| \emph{solves}
+$S_Ww=\mu_1-\mu_2$; it does not form an inverse. Backslash is a solve, not a
+division, and it is both faster and more accurate than \texttt{inv(Sw)*(m1-m2)}.
+
+\section{Eigenfaces (\texttt{eigenfaces\_vs\_fisherfaces.m})}
+
+\subsection{The criterion}
+PCA keeps the top eigenvectors of the total scatter
+$S_T=\sum_i(x_i-\mu)(x_i-\mu)\T$, i.e.\ the directions of greatest variance.
+Equivalently it minimises squared reconstruction error at every $k$.
+
+\subsection{The $L=X\T X$ trick, and why it is necessary}
+$S_T$ is $d\times d$. For Yale that is $32{,}256^2$ doubles, about $8.3$\,GB ---
+we cannot even store it. We do not have to.
+
+\textbf{Theorem.} Let $L=X\T X$, which is $N\times N$. If $Lw=\lambda w$ with
+$\lambda\ne0$, then $Xw$ is an eigenvector of $XX\T$ with the same $\lambda$.
+
+\textbf{Proof.} Multiply $X\T Xw=\lambda w$ on the left by $X$:
+\[ X(X\T Xw)=X(\lambda w)\quad\Longrightarrow\quad (XX\T)(Xw)=\lambda(Xw), \]
+regrouping by associativity. It is non-zero because
+$\|Xw\|^2=w\T X\T Xw=\lambda\|w\|^2\ne0$. $\square$
+
+So we solve a $1520\times1520$ problem instead of a $32{,}256\times32{,}256$ one.
+
+\begin{lstlisting}
+L = A' * A;
+[V, D] = eig(L);
+[vals, order] = sort(diag(D), 'descend');
+V = V(:, order);
+U = A * V;
+for i = 1:N
+    U(:, i) = U(:, i) / norm(U(:, i));
+end
+U = U(:, 1:N-1);
+\end{lstlisting}
+
+\textbf{Three things that would be wrong without a line of code.}
+\begin{itemize}
+\item \textbf{\texttt{eig} returns ascending eigenvalues.} Without the
+  \texttt{'descend'} sort you keep the \emph{least} useful directions. It does
+  not error --- the accuracy just collapses.
+\item \textbf{The columns need renormalising.} The same proof gives
+  $\|Xw\|=\sqrt\lambda$, not $1$. Without it $U\T U\ne I$ and the projection
+  is no longer orthogonal.
+\item \textbf{The last column is dropped.} After centring the columns of $X$
+  sum to zero, so $\operatorname{rank}X\le N-1$ and the last eigenvalue is zero
+  up to round-off. Dividing by that tiny norm would amplify pure round-off into
+  something that looks like a legitimate eigenface.
+\end{itemize}
+
+\subsection{Why centre at all?}
+PCA finds directions of maximum \emph{variance}, which is spread about the
+centre. Without subtracting $\mu$ the first component points at the mean face
+itself --- the direction in which the raw vectors are longest --- describing
+what faces have in common rather than how they differ.
+
+\subsection{The correlation baseline}
+Nearest neighbour on raw pixels, after making each image zero-mean and
+unit-norm. That turns Euclidean distance into correlation matching, because for
+unit vectors
+\[ \|a-b\|^2 = a\T a - 2a\T b + b\T b = 2 - 2\,a\T b, \]
+so the nearest neighbour is the most correlated one. It also removes a
+brightness offset and a contrast scaling. If a projection cannot beat this, it
+is not earning its place --- and on Yale, eigenfaces do not (42.95 vs 34.23).
+
+\section{Fisherfaces (\texttt{eigenfaces\_vs\_fisherfaces.m})}
+
+\subsection{The criterion and the generalised eigenproblem}
+\[ J(w)=\frac{w\T S_Bw}{w\T S_Ww},\qquad
+   W_{fld}=\arg\max_W\frac{|W\T S_BW|}{|W\T S_WW|}. \]
+Stationary points of $J$ satisfy $S_Bw=\lambda S_Ww$, and at a solution
+$\lambda=J(w)$ exactly --- \emph{each generalised eigenvalue is the Fisher score
+of its own direction}, which is why taking the largest ones is correct and not
+merely a heuristic.
+
+\subsection{The two rank bounds}
+
+\textbf{$\operatorname{rank}S_B\le c-1$.} $S_B$ is a sum of $c$ rank-one terms
+spanned by $\mu_j-\mu$, and those satisfy one linear relation:
+\[ \sum_j n_j(\mu_j-\mu)=\sum_j n_j\mu_j-N\mu=N\mu-N\mu=0. \]
+$c$ vectors with a dependence span at most $c-1$ dimensions. \textbf{Hence at
+most $c-1$ Fisherfaces, however many pixels or images we have.}
+
+\textbf{$\operatorname{rank}S_W\le N-c$.} Within class $j$ the $n_j$ centred
+columns sum to zero by the definition of $\mu_j$, so they span at most $n_j-1$
+dimensions; summing, $\sum_j(n_j-1)=N-c$. Read as \emph{degrees of freedom}:
+each person donates only $n_j-1$ directions --- ORL 5, Yale 39.
+
+\subsection{The small-sample-size problem}
+In pixel space $S_W$ is $d\times d$ but has rank at most $N-c$. For Yale that
+is $1482\ll32{,}256$: $S_W$ is massively singular, $S_W^{-1}$ does not exist,
+and $J(w)$ is undefined for any $w$ in the null space. The paper's fix, which
+we follow, is to project onto $m$ PCA directions first. Combining the bounds,
+\[ \boxed{\,c-1\;\le\;m\;\le\;N-c\,} \]
+--- the lower bound because $c-1$ directions cannot be extracted from a space
+of fewer than $c-1$ dimensions. We found that by crashing the E1 sweep at
+$m=20$ while asking for 31 Fisherfaces.
+
+\subsection{Solving it}
+$S_W^{-1}S_B$ is not symmetric: its transpose is $S_BS_W^{-1}$. The clean route
+factors $S_W=R\T R$ (Cholesky, possible because $S_W$ is symmetric positive
+definite in the reduced space) and substitutes $w=R^{-1}z$:
+\[ S_BR^{-1}z=\lambda R\T RR^{-1}z=\lambda R\T z
+   \ \xrightarrow{\times R^{-\top}}\
+   \underbrace{R^{-\top}S_BR^{-1}}_{M}z=\lambda z, \]
+and $M\T=R^{-\top}S_B\T R^{-1}=M$. So a generalised problem becomes an ordinary
+\emph{symmetric} one: real eigenvalues, orthogonal eigenvectors, backward-stable
+algorithm. Recover $w=R^{-1}z$; the eigenvalues are untouched, so each is still
+$J(w)$.
+
+The paper specifies none of this. It says only ``the generalized eigenvectors of
+$S_B$ and $S_W$'', so the solver is our choice --- the code calls
+\texttt{eig(Sb,Sw)}.
+
+\begin{lstlisting}
+[V2, D2] = eig(Sb, Sw);
+[lam, order2] = sort(diag(D2), 'descend');
+Wfld = V2(:, order2(1:c-1));
+Wopt = Wpca * Wfld;
+for i = 1:size(Wopt, 2)
+    Wopt(:, i) = Wopt(:, i) / norm(Wopt(:, i));
+end
+\end{lstlisting}
+
+\subsection{The normalisation step --- the most likely question}
+\texttt{eig(Sb,Sw)} returns columns satisfying $W\T S_WW=I$. They are
+$S_W$-orthogonal, \textbf{not} Euclidean-orthogonal, and their ordinary lengths
+differ by a factor of $287$ here. $J$ does not care, because it is
+scale-invariant and the \emph{subspace} is already correct. But the classifier
+is 1-NN with Euclidean distance, and
+\[ \|a-b\|^2=\sum_l (a_l-b_l)^2 \]
+is \emph{not} scale-invariant: a coordinate whose basis vector is long
+contributes more to every distance, so a few directions dominate every
+comparison.
+
+\textbf{Measured cost of omitting four lines: ORL $90.6\%\to29.5\%$.} Same
+subspace, same eigenvalues, same theory --- only the basis lengths differ. This
+was a real bug in our first implementation, and $29.5\%$ reads as ``LDA does not
+work'', which is why it is worth being able to explain.
+
+\subsection{Why $S_B$ needs no recentring in the code}
+In the reduced space the code writes \texttt{Sb = Sb + Np*(mp*mp')} rather than
+$n_j(\mu_j-\mu)(\mu_j-\mu)\T$. That is correct because $Z=W_{pca}\T X$ and $X$
+was already centred, so the overall mean of $Z$ is exactly zero.
+
+\section{The experiments}
+
+\subsection{E1 --- sweeping $m$, with $\kappa(S_W)$}
+\textbf{Question.} The paper fixes $m=N-c$, where $S_W$ has rank $m$ exactly:
+full rank with \emph{zero slack}. Is that the best choice?
+
+\textbf{Answer: no, on either database.} ORL peaks at $m=60$ with $95.3\%$
+against $90.6\%$ at $m=160$; Yale at $m=1000$ with $69.8\%$ against $67.2\%$ at
+$m=1482$. $\kappa(S_W)$ reaches $7.9\times10^{7}$ and $6.0\times10^{12}$
+respectively at $m=N-c$.
+
+\textbf{Mechanism.} $\kappa=\lambda_{\max}/\lambda_{\min}$ says how much a
+relative error is amplified; roughly $\log_{10}\kappa$ of our 16 digits are
+lost. LDA \emph{inverts} $S_W$, so it divides by the smallest eigenvalues ---
+precisely the worst-estimated ones. Accuracy turns down before conditioning
+becomes alarming, so the extra directions are also fitting noise, not only
+losing precision.
+
+\textbf{The deeper answer, if pushed.} The controlling quantity is not $m$ but
+the sampling ratio $\gamma=m/(N-c)$. Marchenko--Pastur gives
+$\kappa\approx\big((1+\sqrt\gamma)/(1-\sqrt\gamma)\big)^2$, which diverges as
+$\gamma\to1$ --- and $\gamma=1$ \emph{is} $m=N-c$. Against our ORL sweep the
+ratio of measurement to prediction is $9.8,\,10.1,\,8.8,\,6.5$ at
+$m=31,60,100,140$: near constant, because the measured conditioning factorises
+into the intrinsic conditioning of the true $S_W$ (about 9) times the sampling
+inflation. So the blow-up is a predictable sampling artefact, not a quirk of
+faces.
+
+\subsection{E2 --- label permutation}
+\textbf{Question.} Is $90.6\%$ real, or is the pipeline leaking?
+
+Shuffle the training labels and change nothing else. Eigenfaces fall $94.5\to0.8$,
+Fisherfaces $90.6\to0.0$, against chance $100/c=3.1\%$.
+
+\textbf{Why below chance, not at it?} The shuffle is applied to training labels
+only, so LDA faithfully separates the \emph{shuffled} grouping. A test face is
+projected next to the training images that genuinely resemble it --- and those
+now carry somebody else's label by construction. The method is
+\emph{systematically} wrong, not randomly wrong. A method that ignored the
+labels would sit at $3.1\%$; scoring below that is evidence the labels are
+being used.
+
+\subsection{E3 --- cross-validated $m$}
+\textbf{Question.} E1 read ``the best $m$'' off the test column. That is tuning
+on test. What is the honest number?
+
+Six-fold leave-one-out inside the training set, with the PCA basis recomputed
+per fold so the validation image cannot leak into it. CV picks $m=40$, scoring
+$93.0\%$; tuning on test would pick $m=60$ for $95.3\%$.
+
+\textbf{The 2.3-point gap is the optimism avoided.} Note the CV rates sit
+\emph{above} the test rates, which is consistent rather than contradictory: the
+validation images come from the same six-image pool as the training images, an
+easier problem. CV is used to \emph{rank} values of $m$, not to estimate the
+final accuracy.
+
+\subsection{E4 --- noise robustness}
+\textbf{A prediction, not a fishing trip.} Fisherfaces are higher-frequency
+than eigenfaces because whitening scales each eigen-direction of $S_W$ by
+$1/\sqrt\lambda$, amplifying the low-variance fine-detail directions most.
+White noise has energy at every frequency, so Fisherfaces should degrade faster.
+
+\textbf{Confirmed, with a caveat.} From $\sigma=0$ to $640$ grey levels
+Fisherfaces lose $60.2$ points against eigenfaces' $21.9$. But nothing moves
+below $\sigma\approx160$: our first attempt stopped at $\sigma=80$ and found
+all methods moving $0.8$ points, which on 128 test images is exactly
+\emph{one image}. Projection is a strong denoiser --- a unit-norm direction
+turns per-pixel noise of standard deviation $\sigma$ into coefficient noise of
+the same $\sigma$, while the coefficients themselves are in the thousands.
+
+\subsection{E5 --- error against lighting angle}
+Yale filenames encode the lamp direction, e.g.\
+\texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$.
+Treating them as rotations about perpendicular axes, the direction cosine along
+the camera axis is the product of the cosines, so
+$\theta=\arccos(\cos\mathrm{az}\cdot\cos\mathrm{el})$.
+
+\begin{center}
+\begin{tabular}{lccccc}\toprule
+Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
+Images & 0 & 104 & 152 & 300 & 338\\\midrule
+Eigenfaces & --- & 1.0 & 30.9 & 88.3 & 93.8\\
+Fisherfaces & --- & 0.0 & 2.0 & 22.0 & 66.3\\\bottomrule
+\end{tabular}
+\end{center}
+
+Error climbs and the gap \emph{widens}: $15\times$ better at $26$--$50^\circ$.
+
+\textbf{The empty first bin is itself a finding.} \texttt{dir} sorts names as
+text and \texttt{'+'} precedes \texttt{'-'}, so taking the first 40 files per
+subject puts every near-frontal lamp into training. Every test image is at
+least $12^\circ$ off axis and 638 of 894 are beyond $50^\circ$. The test set is
+the hard tail of the lighting distribution, not a sample of it --- which is why
+the headline Yale numbers look so poor.
+
+\subsection{E6 --- sweeping the number of classes}
+For $c=2,4,8,16,32$ the number of Fisherfaces produced is $1,3,7,15,31$ ---
+exactly $c-1$ every time, so the rank bound is a live constraint and not merely
+a proof on a page. Fisherfaces are at $100\%$ for $c\le8$ on the \emph{same}
+six-images-per-person data on which they lose at $c=32$, which is why ``too few
+images per class'' cannot on its own be the explanation for ORL.
+
+\subsection{E7 --- glasses or no glasses}
+A different question: not \emph{who} is this but \emph{is this person wearing
+glasses}. With $c=2$, $\operatorname{rank}S_B\le1$ and there is exactly
+\textbf{one} Fisherface, $w\propto S_W^{-1}(\mu_1-\mu_2)$. PCA's subspace
+depends only on $S_T$ and does not change with the labels at all --- which is
+the cleanest illustration of supervised versus unsupervised in the whole
+project.
+
+ORL ships no glasses labels, so all 400 images were labelled by inspection: 117
+wear glasses, 8 people appear both ways. On the raw set, always answering
+``no'' scores $70.8\%$ and beats any real method, so the set was balanced to
+234 images and evaluated leave-one-\emph{subject}-out, so the test face is never
+seen in training.
+
+\textbf{Result: PCA $44.9\%$ error, one Fisherface $41.0\%$, baseline $50\%$.}
+The paper got $52.6\%$ and $5.3\%$. \emph{We reproduce that PCA is near chance
+but not that Fisherfaces solve the task.} The likely cause is the data: the
+paper's 36 images were \emph{paired} --- the same person with and without
+glasses in one session --- so glasses were the only thing that changed. In ORL
+glasses co-vary with pose, expression and session, so one direction has no
+clean signal to lock onto.
+
+\section{MATLAB constructs used}
+
+\begin{center}
+\begin{tabular}{ll}\toprule
+construct & what to say about it\\\midrule
+\texttt{im(:)} & flattens an image to a column, \emph{column by column}\\
+\texttt{reshape(v,h,w)} & the exact inverse; used to display a face\\
+\verb|A \ b| & \emph{solves} $Ax=b$; never forms an inverse\\
+\texttt{eig(L)} & returns eigenvalues \textbf{ascending}; we always sort\\
+\texttt{eig(Sb,Sw)} & the generalised problem; columns are $S_W$-orthonormal\\
+\texttt{sort(\dots,'descend')} & second output is the permutation; reorder vectors with it\\
+\texttt{double(imread(\dots))} & \texttt{uint8} arithmetic saturates --- convert first\\
+\texttt{X - meanFace} & implicit expansion subtracts from all columns\\
+\texttt{Z(:, labels==p)} & logical indexing picks one class's columns\\
+\texttt{cond(Sw)} & $\lambda_{\max}/\lambda_{\min}$; E1 plots it\\
+\texttt{rank(Sw)} & tolerance-based, so it can disagree with \texttt{chol}\\\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Viva questions}
+
+\subsection{Core}
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[Why does PCA fail under lighting?] It keeps directions of largest
+  variance and never sees the labels. Changing the lamp moves the pixels more
+  than changing the person does, so the leading components encode lighting.
+\item[Then why not just drop the first three components?] You can, and it
+  helps: Yale goes $34.23\to58.72$. But it assumes the nuisance is exactly
+  3-dimensional (the Lambertian argument), whereas LDA learns the nuisance from
+  the labels. Fisherfaces still beat drop-3 on Yale. And on ORL the same trick
+  \emph{hurts} ($95.31\to87.50$), because there the leading components carry
+  identity.
+\item[Why do Fisherfaces lose on ORL?] Eigenfaces never estimates $S_W$; it
+  keeps the \emph{largest} eigenvalues of a well-estimated $S_T$. Fisherfaces
+  must \emph{invert} $S_W$ and so leans on its \emph{smallest} eigenvalues,
+  which are the worst estimated. ORL gives 5 degrees of freedom per person,
+  Yale 39.
+\item[So it is just a sample-size problem?] Not only. E6 shows Fisherfaces at
+  $100\%$ for $c\le8$ on the same six-images-per-person data. What matters is
+  how much \emph{structured} within-class variation there is to remove ---
+  illumination on Yale is large, shared and nearly low-dimensional; pose and
+  expression on ORL are small and idiosyncratic.
+\end{description}
+
+\subsection{Linear algebra}
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[Why is there a limit of $c-1$ Fisherfaces?] $\operatorname{rank}S_B\le c-1$,
+  because $\sum_jn_j(\mu_j-\mu)=0$ makes the class-mean vectors dependent.
+  E6 confirms the count is exactly $c-1$ at every $c$ tested.
+\item[Why is $S_W$ singular in pixel space?] $\operatorname{rank}S_W\le N-c$,
+  since each class's deviations sum to zero and contribute $n_j-1$ directions.
+  For Yale $1482\ll32{,}256$.
+\item[Why not just use \texttt{inv(Sw)*Sb}?] It is not symmetric --- its
+  transpose is $S_BS_W^{-1}$ --- so you lose the guarantees of a symmetric
+  solver: real eigenvalues and orthogonal eigenvectors.
+\item[Why does the Cholesky substitution work?] $S_W=R\T R$, and $w=R^{-1}z$
+  turns $S_Bw=\lambda S_Ww$ into $(R^{-\top}S_BR^{-1})z=\lambda z$, which is
+  symmetric because $S_B$ is. Eigenvalues are unchanged, so each is still $J(w)$.
+\item[Are Fisherfaces orthogonal?] \textbf{No.} They are $S_W$-orthogonal:
+  $W\T S_WW=I$, not $W\T W=I$. Measured, the off-diagonal energy is
+  $3.8\times10^{-13}$ in the $S_W$ inner product and $0.499$ in the Euclidean
+  one --- half the energy off-diagonal.
+\item[Why is $\|Xw\|=\sqrt\lambda$?] $\|Xw\|^2=w\T X\T Xw=w\T(\lambda w)=\lambda$
+  for unit $w$. Hence the renormalisation loop.
+\end{description}
+
+\subsection{Implementation}
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[What breaks if you skip the unit-norm loop on \texttt{Wopt}?] ORL falls
+  from $90.6\%$ to $29.5\%$. \texttt{eig(Sb,Sw)} gives $S_W$-orthonormal
+  columns whose Euclidean lengths differ by $287\times$, and 1-NN with
+  Euclidean distance is not scale-invariant.
+\item[What breaks if you forget \texttt{'descend'}?] Nothing errors --- you
+  silently keep the least useful directions and accuracy collapses.
+\item[Why drop the last eigenface?] After centring $\operatorname{rank}X\le N-1$,
+  so the last eigenvalue is zero up to round-off; dividing by that norm turns
+  round-off into a unit vector that looks legitimate.
+\item[Why \texttt{double()} before any arithmetic?] \texttt{uint8} saturates:
+  $200+100$ becomes $255$ and $5-10$ becomes $0$, so every mean and difference
+  would be silently wrong.
+\item[Why is $m=N-c$ and not larger?] Larger makes $S_W$ singular, since
+  $\operatorname{rank}S_W\le N-c$. And not smaller than $c-1$, since you cannot
+  pull $c-1$ directions out of fewer dimensions.
+\item[How do you know your accuracy is not a bug?] E2: destroying the training
+  labels takes both methods to chance or below.
+\end{description}
+
+\subsection{Protocol and honesty}
+\begin{description}[style=nextline,leftmargin=0pt]
+\item[Is $95.3\%$ your real ORL accuracy?] No. That is the best $m$ chosen by
+  looking at the test set. Cross-validated, $m=40$ gives $93.0\%$, and the
+  2.3-point gap is the optimism. $93.0\%$ is the honest figure.
+\item[Why are the Yale numbers so low?] The split. \texttt{dir} sorts as text
+  and \texttt{'+'} precedes \texttt{'-'}, so training gets every frontal lamp
+  and testing gets only hard angles --- every test image is at least $12^\circ$
+  off axis and 638 of 894 beyond $50^\circ$.
+\item[What did you not implement?] The Linear Subspace method of the paper's
+  Section 2.3, which builds a 3-D illumination subspace per person.
+\item[Did you use the paper's databases?] No, and the report says so. The
+  paper's lighting experiment used the Harvard database, which has no surviving
+  public download, and its Yale set was a smaller 1997 database. We used
+  Cropped Extended Yale B, by the same authors in 2001, so E5 is modelled on
+  the paper's protocol rather than a reproduction of it.
+\item[Anything that did not work?] Yes, and it is reported: E7. We reproduce
+  the paper's finding that PCA is near chance on glasses, but not that
+  Fisherfaces solve it ($41.0\%$ error against their $5.3\%$). Their images were
+  paired, same person with and without glasses in one session; ORL's are not.
+\end{description}
+
+\section{One-glance summary}
+
+\begin{center}
+\begin{tabular}{ll}\toprule
+Fact & Number\\\midrule
+Yale: eigenfaces $\to$ Fisherfaces & $34.23\% \to 67.23\%$\\
+ORL: eigenfaces $\to$ Fisherfaces & $95.31\% \to 90.62\%$\\
+Drop top 3 on Yale (helps) & $34.23\% \to 58.72\%$\\
+Drop top 3 on ORL (hurts) & $95.31\% \to 87.50\%$\\
+Fisherfaces without unit-norming & $90.6\% \to 29.5\%$\\
+Honest ORL accuracy (cross-validated) & $93.0\%$, not $95.3\%$\\
+Best $m$ vs the paper's $N-c$ (ORL) & $60$ vs $160$; $95.3$ vs $90.6$\\
+$\kappa(S_W)$ at $m=N-c$ & $7.9\times10^{7}$ (ORL), $6.0\times10^{12}$ (Yale)\\
+Number of Fisherfaces & exactly $c-1$, every $c$ tested\\
+Labels shuffled & $0.8\%$ and $0.0\%$ vs chance $3.1\%$\\
+Lighting $26$--$50^\circ$ & $30.9\%$ vs $2.0\%$ error\\
+Glasses, one Fisherface & $41.0\%$ error vs the paper's $5.3\%$\\\bottomrule
+\end{tabular}
+\end{center}
+
+\end{document}

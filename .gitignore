@@ -10,44 +10,21 @@
 !.gitignore
 !README.md
 
-!final_submission/
-!final_submission/**
-!fisherfaces_project/
-!fisherfaces_project/**
+!sk/
+!sk/**
 !q1_matlab/
 !q1_matlab/**
 
 # LaTeX build artefacts (the compiled PDF IS tracked, on purpose)
-fisherfaces_project/*.aux
-fisherfaces_project/*.toc
-fisherfaces_project/*.log
-fisherfaces_project/*.out
-fisherfaces_project/*.synctex.gz
 
 # macOS
 .DS_Store
 **/.DS_Store
 
 # scratch experiment scripts (the real experiments live in fisherfaces_project.m)
-fisherfaces_project/isolate.m
-fisherfaces_project/routes*.m
-fisherfaces_project/altstudy.m
-fisherfaces_project/resstudy.m
-fisherfaces_project/dropk.m
-fisherfaces_project/freq.m
-fisherfaces_project/s19*.m
-fisherfaces_project/dsfig.m
-fisherfaces_project/buildtest.m
-fisherfaces_project/sgtest.*
 
 # dataset bundle for the viva (57 MB) - built by zipping ORL + CroppedYale
 datasets_for_viva.zip
 
 # report build artefacts
-fisherfaces_project/report.aux
-fisherfaces_project/report.log
-fisherfaces_project/report.out
 submission.zip
-fisherfaces_project/report.aux
-fisherfaces_project/report.log
-fisherfaces_project/report.out
