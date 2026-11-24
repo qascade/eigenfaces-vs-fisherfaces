@@ -175,22 +175,16 @@ A different question, and the paper's Section 3.3: not \emph{who} is this, but \
 
 \textbf{Both methods share one pipeline.} We first project, with PCA or with LDA, and then classify by 1-nearest neighbour, using the glasses label in place of the identity label. Only the projection differs. PCA picks its directions by total variance and never sees a label, so it can succeed only if glasses account for a large share of that variance. They do not: a pair of frames is a small, localised, high-frequency detail, and the leading $k=10$ components are exactly where such detail is discarded. LDA picks the single direction that best separates the two labelled groups while discounting the variation inside them. The comparison therefore isolates one thing, whether using the labels to choose the directions helps.
 
-ORL ships no glasses labels, so we labelled all 400 images by inspection: 117 wear glasses and 8 people appear both with and without, which is what makes the question non-trivial. On the raw set, always answering ``no'' scores 70.8\% and beats any real method, so we balanced it to 234 images (50/50) and used leave-one-\emph{subject}-out: the test face is never seen in training, so the classifier cannot cheat by recognising the person.
+ORL ships no glasses labels, so we labelled all 400 images by inspection: 117 wear glasses and 8 people appear both with and without, which is what makes the question non-trivial. On the raw set, always answering ``no'' scores 70.8\% and beats any real method, so we balanced it to 234 images, 117 of each, where that same lazy answer scores only 50\% and used leave-one-\emph{subject}-out: the test face is never seen in training, so the classifier cannot cheat by recognising the person.
 
-\textbf{One balanced subset is not an experiment.} Which 117 no-glasses images get drawn moved the Fisherface error from 34.6\% to 44.4\%, so we average over ten draws and report the range too.
-\begin{center}
-\begin{tabular}{lccc}\toprule
-Error (\%) & Ours (mean of 10) & Range & Paper (Yale, 36 images)\\\midrule
-PCA ($k=10$) & 39.1 & 32.5--45.3 & 52.6\\
-One Fisherface & \textbf{38.2} & 34.6--44.4 & \textbf{5.3}\\
-Always answer ``no'' & 50.0 & n/a & 50.0\\\bottomrule
-\end{tabular}
-\end{center}
-\textbf{We reproduce the paper's finding that PCA is near chance, but not that Fisherfaces solve the task.} We think the difference is the data, not the method: the paper's 36 images were \emph{paired}, the same person photographed with and without glasses in one session under the same lighting, so glasses were the only thing that changed. In ORL glasses co-vary with pose, expression and session, so the single Fisher direction has no clean signal to lock onto. This is a negative result and we report it as one.
+\textbf{The result: neither method works.} Averaged over ten random balanced draws, PCA at $k=10$ gets \textbf{39.1\%} error and the single Fisherface \textbf{38.2\%}, against the 50\% a coin achieves. The 0.9 points between them is two images out of 234 and sits inside a draw-to-draw spread of ten points, so the two are tied. One draw alone would have proved nothing: depending on which 117 of the 283 no-glasses images are drawn, the Fisherface lands anywhere between 34.6\% and 44.4\%, which is why the evaluation is repeated.
+
 \begin{center}
 \includegraphics[width=0.48\textwidth]{figures/E2_glasses.png}
-\captionof{figure}{Mean error over ten balanced draws on a person never seen in training; the dashed line is the 50\% a coin achieves.}
+\captionof{figure}{Mean error over ten balanced draws, on a person never seen in training. The dashed line is the 50\% a coin achieves, and neither bar clears it by much.}
 \end{center}
+
+\textbf{Why it fails, and why the paper did not.} The paper reports 52.6\% for PCA and 5.3\% for a single Fisherface, so we reproduce its finding that PCA is near chance but not that Fisherfaces rescue the task. Those figures come from 36 images of its own Yale set, and the difference is the data rather than the method. Their 36 were \emph{paired}: the same person photographed with and without glasses in one session under the same lighting, so glasses were the only thing that changed. In ORL glasses arrive bundled with a different person, pose, expression and session, so the one Fisher direction has no clean signal to lock onto. This is a negative result and we report it as one.
 
 \subsection{E3: Error against lighting angle}
 The paper does not report one Yale number; it bins the test images by $\theta$, the angle of the lamp off the optical axis defined in Section 2. The five bins are the standard subsets of the Yale B literature.
