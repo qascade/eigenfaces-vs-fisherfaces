@@ -1,6 +1,6 @@
 \documentclass[11pt]{article}
 \usepackage[a4paper,margin=0.9in]{geometry}
-\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,xcolor,array}
+\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,xcolor,array,tikz}
 \usepackage[hidelinks]{hyperref}
 \usepackage{caption}
 \setlength{\parindent}{0pt}\setlength{\parskip}{5pt}
@@ -73,6 +73,37 @@ the lower bound because $c-1$ directions cannot be pulled out of a space with fe
 \textbf{Solving $S_Bw=\lambda S_Ww$.} $S_W^{-1}S_B$ is not symmetric (its transpose is $S_BS_W^{-1}$), so the clean route factors $S_W=R\T R$ (Cholesky) and substitutes $w=R^{-1}z$, giving a symmetric ordinary eigenproblem with real eigenvalues and orthogonal eigenvectors:
 \[ \left(R^{-\top}S_BR^{-1}\right)z=\lambda z,\qquad w=R^{-1}z,\qquad w_i\T S_Ww_j=0\ (i\ne j). \]
 The paper specifies none of this. It says only ``the generalized eigenvectors of $S_B$ and $S_W$'', so the solver is our choice. The code calls \texttt{eig(Sb,Sw)}.
+
+
+\textbf{Lighting, and the angle we measure.} A Lambertian patch with albedo $\rho$ and unit normal $n$, lit by a distant source $s$, has intensity $I=\rho\max(n\T s,0)$. Drop the $\max$ and stack all $d$ pixels: $x=Bs$, where $B$ depends only on the face and $s$ only on the lamp. One person's images under all lightings therefore lie in a subspace of dimension at most \textbf{3}, however many pixels there are. That is why illumination is \emph{structured} nuisance, the kind LDA can divide out, and it is the argument behind discarding the first three eigenfaces. The $\max$ we dropped is attached shadow, and cast shadows are not modelled at all, so past roughly $60^\circ$ off axis a large part of the face is dark and this linear picture no longer holds.
+
+\textbf{The angle.} Yale specifies the lamp by \emph{azimuth} and \emph{elevation}, not by the $(\theta,\varphi)$ of the usual spherical convention, so the two must not be confused. Azimuth is measured in the horizontal plane from the optical axis, elevation is the rise above that plane, and with the camera looking along $z$,
+\[ \frac{s}{\|s\|}=\bigl(\cos\mathrm{el}\sin\mathrm{az},\ \sin\mathrm{el},\ \cos\mathrm{el}\cos\mathrm{az}\bigr). \]
+Write $\theta$ for the angle between $s$ and the optical axis. It is the inverse cosine of the $z$ component,
+\[ \theta=\arccos\!\left(\cos\mathrm{el}\cdot\cos\mathrm{az}\right), \]
+and $\theta$, not azimuth or elevation separately, is what E3 bins on. For \texttt{yaleB01\_P00A+020E-40}, azimuth $+20^\circ$ and elevation $-40^\circ$ give $\theta=44.0^\circ$.
+\begin{center}
+\begin{tikzpicture}[>=latex,scale=0.92]
+% (X,Y,Z) -> 4.6*(Z-0.55X, Y-0.38X).  Lamp drawn at az = 40, el = 32.
+\fill[black!7] (0,0) -- (4.6,0) -- (2.07,-1.75) -- (-2.53,-1.75) -- cycle;
+\fill[blue!8] (0,0) -- (2.237,-1.323) -- (2.237,1.477) -- (0,2.8) -- cycle;
+\draw[blue!25] (0,0) -- (2.237,-1.323) -- (2.237,1.477) -- (0,2.8) -- cycle;
+\draw[->,thick] (0,0) -- (4.75,0) node[right] {$z$: optical axis};
+\draw[->] (0,0) -- (-2.53,-1.75) node[below left] {$x$};
+\draw[->] (0,0) -- (0,3.3) node[above] {$y$: up};
+\draw[->,very thick,blue!60!black] (0,0) -- (1.610,1.486) node[above left=-1pt] {lamp $s$};
+\draw[dashed] (1.610,1.486) -- (1.610,-0.952);
+\draw[->,dashed] (0,0) -- (2.40,-1.420);
+\node[font=\footnotesize,anchor=north west] at (2.26,-1.45) {$s$ dropped into the horizontal plane};
+\draw[thick] (0.95,0) to[bend left=10] (0.698,0.644);
+\node[font=\small] at (1.14,0.44) {$\theta$};
+\draw[thick] (3.10,0) to[bend right=7] (2.669,-1.579);
+\node[font=\small] at (3.32,-0.88) {$\mathrm{az}$};
+\draw[thick] (1.721,-1.018) to[bend left=9] (1.470,1.357);
+\node[font=\small] at (2.02,0.30) {$\mathrm{el}$};
+\end{tikzpicture}
+\captionof{figure}{The three angles, in the convention Yale uses. The lamp direction $s$ is given by its \emph{azimuth}, the angle from the optical axis measured in the horizontal plane, and its \emph{elevation}, the angle of $s$ above that plane. Neither is $\theta$, the angle between $s$ and the optical axis, which is what the subsets are binned on.}
+\end{center}
 
 \section{Implementation}
 Three scripts, each with its helper functions at the bottom: \texttt{toy.m} (the 2-D demonstration), \texttt{eigenfaces\_vs\_fisherfaces.m} (the main comparison) and \texttt{experiments.m} (E1--E3). Base MATLAB only, no toolboxes.
@@ -162,16 +193,7 @@ Always answer ``no'' & 50.0 & n/a & 50.0\\\bottomrule
 \end{center}
 
 \subsection{E3: Error against lighting angle}
-The paper does not report one Yale number; it bins the test images by how far the lamp is from the camera axis. Write the lamp direction as a unit vector in the usual spherical convention, with the camera looking along $z$:
-\[ \frac{s}{\|s\|}=(\cos\mathrm{el}\sin\mathrm{az},\ \sin\mathrm{el},\ \cos\mathrm{el}\cos\mathrm{az}), \]
-so the angle off the optical axis is the inverse cosine of the $z$ component,
-\[ \theta=\arccos\!\left(\cos\mathrm{el}\cdot\cos\mathrm{az}\right). \]
-Yale filenames give azimuth and elevation directly: \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$, giving $\theta=44.0^\circ$.
-\begin{center}
-\includegraphics[width=0.36\textwidth]{figures/angle_spherical.png}
-\captionof{figure}{The angle being measured. Taking $z$ as the camera's optical axis and the marked direction as the lamp, $\theta$ is the quantity the bins below are built from. Yale parameterises the lamp by azimuth and elevation rather than by $(\theta,\varphi)$, hence the conversion above. Diagram: Wikimedia Commons, public domain.}
-\end{center}
-The five bins below are the standard subsets of the Yale B literature.
+The paper does not report one Yale number; it bins the test images by $\theta$, the angle of the lamp off the optical axis defined in Section 2. The five bins are the standard subsets of the Yale B literature.
 \begin{center}
 \begin{tabular}{lccccc}\toprule
 Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
@@ -184,7 +206,6 @@ Error climbs with angle for both methods and the gap \emph{widens}: at $26$--$50
 
 \textbf{Why the first bin is empty.} This is a property of the split, not of the parser, and the chain is worth following. A subject with the full 64 images has 35 taken with positive azimuth and 29 with negative. The loader keeps the first 40 files that \texttt{dir} returns, and \texttt{dir} sorts names as text rather than by angle, with the character \texttt{'+'} ordering before \texttt{'-'}. Every \texttt{A+} file therefore sorts ahead of every \texttt{A-} file, so the first 40 are all 35 positive-azimuth images together with the 5 negative ones nearest zero (down to \texttt{A-015}). Those 40 contain every near-frontal lamp in the database. Testing is left with the far side only, starting at \texttt{A-020}: no test image falls within $12^\circ$ of the axis, which is why the first bin is empty, and 638 of the 894 lie beyond $50^\circ$. The Yale rates in this report are therefore measured on the hard tail of the lighting distribution rather than on a representative sample of it.
 
-\textbf{A caveat on the hardest bin.} Beyond roughly $60^\circ$ a large part of the face is in cast shadow, and the $\max(n\T s,0)$ term that the 3-D illumination subspace argument discards is exactly what produces those shadows. So the last two bins stress a regime the underlying theory does not cover, and the task drifts from recognition under illumination towards recognition from a partly visible face.
 \begin{center}
 \includegraphics[width=0.56\textwidth]{figures/E3_lighting_angle.png}
 \captionof{figure}{Error against lighting angle. The first bin is a gap, not a zero bar, because it holds no test images.}

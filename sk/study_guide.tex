@@ -1,6 +1,6 @@
 \documentclass[11pt]{article}
 \usepackage[a4paper,margin=0.9in]{geometry}
-\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,xcolor,array}
+\usepackage{amsmath,amssymb,booktabs,graphicx,enumitem,xcolor,array,tikz}
 \usepackage[hidelinks]{hyperref}
 \usepackage{listings}
 \usepackage{caption}
@@ -352,19 +352,35 @@ error curve as if one mechanism ran through it.
 \subsection{Measuring the angle}
 Yale filenames give the lamp as azimuth and elevation, e.g.\
 \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$.
-Azimuth and elevation are rotations about perpendicular axes, so in the usual
-spherical convention the lamp direction has unit vector
+Azimuth is measured in the horizontal plane from the optical axis and elevation
+is the rise above that plane. This is \emph{not} the $(\theta,\varphi)$ of the
+usual spherical convention, and the two should not be confused. With the camera
+looking along $z$ the lamp direction has unit vector
 \[ s/\|s\| = (\cos\mathrm{el}\sin\mathrm{az},\ \sin\mathrm{el},\
    \cos\mathrm{el}\cos\mathrm{az}), \]
 and the camera looks along $z=(0,0,1)$.
 
 \begin{center}
-\includegraphics[width=0.38\textwidth]{figures/angle_spherical.png}
-\captionof{figure}{Take $z$ as the camera's optical axis and the marked
-direction as the lamp. Then $\theta$ is exactly the angle the Yale subsets are
-defined by. Note that Yale records the lamp as (azimuth, elevation) and not as
-$(\theta,\varphi)$, which is why the conversion below is needed at all.
-Diagram: Wikimedia Commons, public domain.}
+\begin{tikzpicture}[>=latex,scale=0.92]
+% (X,Y,Z) -> 4.6*(Z-0.55X, Y-0.38X).  Lamp drawn at az = 40, el = 32.
+\fill[black!7] (0,0) -- (4.6,0) -- (2.07,-1.75) -- (-2.53,-1.75) -- cycle;
+\fill[blue!8] (0,0) -- (2.237,-1.323) -- (2.237,1.477) -- (0,2.8) -- cycle;
+\draw[blue!25] (0,0) -- (2.237,-1.323) -- (2.237,1.477) -- (0,2.8) -- cycle;
+\draw[->,thick] (0,0) -- (4.75,0) node[right] {$z$: optical axis};
+\draw[->] (0,0) -- (-2.53,-1.75) node[below left] {$x$};
+\draw[->] (0,0) -- (0,3.3) node[above] {$y$: up};
+\draw[->,very thick,blue!60!black] (0,0) -- (1.610,1.486) node[above left=-1pt] {lamp $s$};
+\draw[dashed] (1.610,1.486) -- (1.610,-0.952);
+\draw[->,dashed] (0,0) -- (2.40,-1.420);
+\node[font=\footnotesize,anchor=north west] at (2.26,-1.45) {$s$ dropped into the horizontal plane};
+\draw[thick] (0.95,0) to[bend left=10] (0.698,0.644);
+\node[font=\small] at (1.14,0.44) {$\theta$};
+\draw[thick] (3.10,0) to[bend right=7] (2.669,-1.579);
+\node[font=\small] at (3.32,-0.88) {$\mathrm{az}$};
+\draw[thick] (1.721,-1.018) to[bend left=9] (1.470,1.357);
+\node[font=\small] at (2.02,0.30) {$\mathrm{el}$};
+\end{tikzpicture}
+\captionof{figure}{The three angles, in the convention Yale uses. The lamp direction $s$ is given by its \emph{azimuth}, the angle from the optical axis measured in the horizontal plane, and its \emph{elevation}, the angle of $s$ above that plane. Neither is $\theta$, the angle between $s$ and the optical axis, which is what the subsets are binned on.}
 \end{center}
 
 The angle off the optical axis is therefore the inverse cosine of the third
