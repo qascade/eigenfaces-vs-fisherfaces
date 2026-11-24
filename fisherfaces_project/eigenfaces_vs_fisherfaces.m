@@ -121,6 +121,23 @@ Uc = U(:, 1:(c-1));
 accEigMatched = nearestNeighbour(Uc'*A, trainLabels, Uc'*(testImages-meanFace), testLabels);
 fprintf('Eigenfaces  (k = c-1 = %d): accuracy = %.2f%%\n', c-1, accEigMatched);
 
+% The paper's other baseline: throw away the first three eigenfaces.  Under
+% Lambertian reflectance the images of one face under all lightings span a
+% 3-D subspace, so components 1-3 are expected to be mostly illumination.
+% Dropping them should HELP where lighting is the nuisance (Yale) and HURT
+% where the leading components carry identity (ORL).
+accDrop3 = 0; bestK3 = 0;
+for kk = ks
+    if kk + 3 > size(U, 2), continue; end
+    Uk3 = U(:, 4:(kk+3));          % skip the first three
+    r = nearestNeighbour(Uk3'*A, trainLabels, Uk3'*(testImages-meanFace), testLabels);
+    if r > accDrop3
+        accDrop3 = r;
+        bestK3   = kk;
+    end
+end
+fprintf('Eigenfaces  w/o top 3 (k = %d): accuracy = %.2f%%\n', bestK3, accDrop3);
+
 %% 6. FISHERFACES
 % Step A: PCA down to m = N - c dimensions, which makes S_W invertible.
 % In pixel space rank(S_W) <= N - c, far below d, so S_W is singular there

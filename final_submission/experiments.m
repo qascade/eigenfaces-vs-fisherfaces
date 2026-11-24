@@ -341,6 +341,9 @@ for i = 1:size(aIm, 2)
     aG(i) = G(aSubj(i), k);
 end
 fprintf('   %d of 400 images wear glasses (%.1f%%)\n', sum(aG), 100*mean(aG));
+fprintf('   on the UNbalanced set, always answering "no" would score %.1f%%,\n', ...
+        100*max(sum(aG==0), sum(aG==1))/numel(aG));
+fprintf('   which beats any real method -- hence the balancing below.\n');
 
 gI = find(aG == 1);
 nI = find(aG == 0);
@@ -384,6 +387,8 @@ ylabel('error rate (%)'); grid on;
 legend('error', 'always say no');
 title('Detecting glasses on a person never seen in training');
 saveas(gcf, [figDir 'E7_glasses.png']);
+
+
 
 fprintf('\n\nfigures saved to %s\n', figDir);
 

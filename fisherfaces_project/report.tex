@@ -560,10 +560,13 @@ $15\times$ lower error in the mid-angle bin). When it is small and
 idiosyncratic --- pose and expression on ORL --- the estimation cost dominates
 and plain PCA, or even no projection at all, does better.
 
-\item \textbf{Few samples per class is not by itself the explanation.} At two
-images per person on Yale, which is \emph{one} degree of freedom and worse than
-ORL's five, Fisherfaces still beat eigenfaces $43.0\%$ to $19.9\%$. What
-matters is how much structured within-class variation there is to remove.
+\item \textbf{Degrees of freedom alone do not explain it.} It is tempting to
+blame ORL's five degrees of freedom per person, but E6 shows Fisherfaces at
+$100\%$ for $c\le8$ on the \emph{same} six-images-per-person data, and E5 shows
+them $15\times$ better than eigenfaces in Yale's mid-angle bin. What decides
+the outcome is how much \emph{structured} within-class variation there is to
+remove --- large, shared and nearly low-dimensional on Yale; small and
+idiosyncratic on ORL.
 
 \item \textbf{$m=N-c$ is defensible but not optimal.} Better accuracy at
 smaller $m$ on both databases, with $\kappa(\Sw)$ five orders of magnitude

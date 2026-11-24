@@ -89,6 +89,8 @@ loading Yale ... (slow)
 
 === E7: glasses vs no glasses (ORL) ===
    117 of 400 images wear glasses (29.2%)
+   on the UNbalanced set, always answering "no" would score 70.8%,
+   which beats any real method -- hence the balancing below.
    balanced subset: 234 images, 50.0% with glasses
 
    method            our error    paper (Yale, 36 images)
