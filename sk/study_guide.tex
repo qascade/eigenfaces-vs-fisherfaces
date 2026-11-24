@@ -24,7 +24,7 @@
 
 This guide covers only what is in the submission: the three scripts
 \texttt{toy.m}, \texttt{eigenfaces\_vs\_}\allowbreak\texttt{fisherfaces.m} and
-\texttt{experiments.m}, and the seven experiments E1--E7. For each piece it
+\texttt{experiments.m}, and the five experiments E1--E5. For each piece it
 gives the theory, the code that implements it, and what can be asked about it.
 
 {\small\tableofcontents}
@@ -87,7 +87,7 @@ coordinates.
 file & runs & produces\\\midrule
 \texttt{toy.m} & the 2-D demonstration & \texttt{toy.png}\\
 \texttt{eigenfaces\_vs\_fisherfaces.m} & the four-method comparison & main table, two face montages\\
-\texttt{experiments.m} & E1--E7 & eight figures\\\bottomrule
+\texttt{experiments.m} & E1--E5 & six figures\\\bottomrule
 \end{tabular}
 \end{center}
 
@@ -336,21 +336,7 @@ validation images come from the same six-image pool as the training images, an
 easier problem. CV is used to \emph{rank} values of $m$, not to estimate the
 final accuracy.
 
-\subsection{E4 --- noise robustness}
-\textbf{A prediction, not a fishing trip.} Fisherfaces are higher-frequency
-than eigenfaces because whitening scales each eigen-direction of $S_W$ by
-$1/\sqrt\lambda$, amplifying the low-variance fine-detail directions most.
-White noise has energy at every frequency, so Fisherfaces should degrade faster.
-
-\textbf{Confirmed, with a caveat.} From $\sigma=0$ to $640$ grey levels
-Fisherfaces lose $60.2$ points against eigenfaces' $21.9$. But nothing moves
-below $\sigma\approx160$: our first attempt stopped at $\sigma=80$ and found
-all methods moving $0.8$ points, which on 128 test images is exactly
-\emph{one image}. Projection is a strong denoiser --- a unit-norm direction
-turns per-pixel noise of standard deviation $\sigma$ into coefficient noise of
-the same $\sigma$, while the coefficients themselves are in the thousands.
-
-\subsection{E5 --- error against lighting angle}
+\subsection{E4 --- error against lighting angle}
 Yale filenames encode the lamp direction, e.g.\
 \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$.
 Treating them as rotations about perpendicular axes, the direction cosine along
@@ -375,34 +361,12 @@ least $12^\circ$ off axis and 638 of 894 are beyond $50^\circ$. The test set is
 the hard tail of the lighting distribution, not a sample of it --- which is why
 the headline Yale numbers look so poor.
 
-\subsection{E6 --- sweeping the number of classes}
+\subsection{E5 --- sweeping the number of classes}
 For $c=2,4,8,16,32$ the number of Fisherfaces produced is $1,3,7,15,31$ ---
 exactly $c-1$ every time, so the rank bound is a live constraint and not merely
 a proof on a page. Fisherfaces are at $100\%$ for $c\le8$ on the \emph{same}
 six-images-per-person data on which they lose at $c=32$, which is why ``too few
 images per class'' cannot on its own be the explanation for ORL.
-
-\subsection{E7 --- glasses or no glasses}
-A different question: not \emph{who} is this but \emph{is this person wearing
-glasses}. With $c=2$, $\operatorname{rank}S_B\le1$ and there is exactly
-\textbf{one} Fisherface, $w\propto S_W^{-1}(\mu_1-\mu_2)$. PCA's subspace
-depends only on $S_T$ and does not change with the labels at all --- which is
-the cleanest illustration of supervised versus unsupervised in the whole
-project.
-
-ORL ships no glasses labels, so all 400 images were labelled by inspection: 117
-wear glasses, 8 people appear both ways. On the raw set, always answering
-``no'' scores $70.8\%$ and beats any real method, so the set was balanced to
-234 images and evaluated leave-one-\emph{subject}-out, so the test face is never
-seen in training.
-
-\textbf{Result: PCA $44.9\%$ error, one Fisherface $41.0\%$, baseline $50\%$.}
-The paper got $52.6\%$ and $5.3\%$. \emph{We reproduce that PCA is near chance
-but not that Fisherfaces solve the task.} The likely cause is the data: the
-paper's 36 images were \emph{paired} --- the same person with and without
-glasses in one session --- so glasses were the only thing that changed. In ORL
-glasses co-vary with pose, expression and session, so one direction has no
-clean signal to lock onto.
 
 \section{MATLAB constructs used}
 
@@ -441,7 +405,7 @@ construct & what to say about it\\\midrule
   must \emph{invert} $S_W$ and so leans on its \emph{smallest} eigenvalues,
   which are the worst estimated. ORL gives 5 degrees of freedom per person,
   Yale 39.
-\item[So it is just a sample-size problem?] Not only. E6 shows Fisherfaces at
+\item[So it is just a sample-size problem?] Not only. E5 shows Fisherfaces at
   $100\%$ for $c\le8$ on the same six-images-per-person data. What matters is
   how much \emph{structured} within-class variation there is to remove ---
   illumination on Yale is large, shared and nearly low-dimensional; pose and
@@ -452,7 +416,7 @@ construct & what to say about it\\\midrule
 \begin{description}[style=nextline,leftmargin=0pt]
 \item[Why is there a limit of $c-1$ Fisherfaces?] $\operatorname{rank}S_B\le c-1$,
   because $\sum_jn_j(\mu_j-\mu)=0$ makes the class-mean vectors dependent.
-  E6 confirms the count is exactly $c-1$ at every $c$ tested.
+  E5 confirms the count is exactly $c-1$ at every $c$ tested.
 \item[Why is $S_W$ singular in pixel space?] $\operatorname{rank}S_W\le N-c$,
   since each class's deviations sum to zero and contribute $n_j-1$ directions.
   For Yale $1482\ll32{,}256$.
@@ -505,12 +469,14 @@ construct & what to say about it\\\midrule
 \item[Did you use the paper's databases?] No, and the report says so. The
   paper's lighting experiment used the Harvard database, which has no surviving
   public download, and its Yale set was a smaller 1997 database. We used
-  Cropped Extended Yale B, by the same authors in 2001, so E5 is modelled on
+  Cropped Extended Yale B, by the same authors in 2001, so E4 is modelled on
   the paper's protocol rather than a reproduction of it.
-\item[Anything that did not work?] Yes, and it is reported: E7. We reproduce
-  the paper's finding that PCA is near chance on glasses, but not that
-  Fisherfaces solve it ($41.0\%$ error against their $5.3\%$). Their images were
-  paired, same person with and without glasses in one session; ORL's are not.
+\item[Anything that did not come out as the paper says?] Yes, and the report
+  says so: on ORL Fisherfaces lose to eigenfaces, $90.62\%$ against $95.31\%$,
+  and lose to raw-pixel correlation as well. ORL varies by pose and expression
+  rather than lighting, so there is little structured within-class variation for
+  LDA to discount, and six images per person is a thin basis for estimating
+  $S_W$.
 \end{description}
 
 \section{One-glance summary}
@@ -529,7 +495,7 @@ $\kappa(S_W)$ at $m=N-c$ & $7.9\times10^{7}$ (ORL), $6.0\times10^{12}$ (Yale)\\
 Number of Fisherfaces & exactly $c-1$, every $c$ tested\\
 Labels shuffled & $0.8\%$ and $0.0\%$ vs chance $3.1\%$\\
 Lighting $26$--$50^\circ$ & $30.9\%$ vs $2.0\%$ error\\
-Glasses, one Fisherface & $41.0\%$ error vs the paper's $5.3\%$\\\bottomrule
+Lighting $>77^\circ$ (hardest bin) & $93.8\%$ vs $66.3\%$ error\\\bottomrule
 \end{tabular}
 \end{center}
 

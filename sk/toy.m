@@ -1,53 +1,40 @@
-%% Minimal LDA on toy data (two classes in 2D)
-% Shows why PCA is not a classifier: all the SPREAD is along x, but all the
-% CLASS INFORMATION is along y.  PCA maximises spread and picks x.  Fisher
-% maximises (between-class / within-class) and picks y.
-%
-% Notation follows the study guide: S_W within-class scatter, S_B between,
-% wLDA the projection direction, J(wLDA) the Fisher criterion.
-
 clc; clear; close all;
-rng(1);                                   % same data every run
-n = 200;                                  % points per class
+rng(1);                                   
+n = 200;                                  
+
 
 figDir = 'figures/';
 if exist(figDir, 'dir') == 0
     mkdir(figDir);
 end
 
-% 1. Make data: both classes are wide in x, thin in y,
-%    and they differ only in y (class 1 at y = +1, class 2 at y = -1)
 A = diag([4 0.5]);
 X1 = A*randn(2,n) + [0; 1];      
 X2 = A*randn(2,n) + [0; -1];
 
-% 2. Class means
+% 1. Class means
 mean1 = mean(X1, 2);
 mean2 = mean(X2, 2);
 
-% 3. Within-class scatter: spread of each class around its own mean
+% 2. Within-class scatter: spread of each class around its own mean
 Sw = (X1 - mean1)*(X1 - mean1)' + (X2 - mean2)*(X2 - mean2)';
 
-% 4. LDA direction: wLDA = Sw^(-1) (mean1 - mean2), made unit length.
-%    Sw \ (mean1-mean2) SOLVES Sw*wLDA = mean1-mean2; it never forms an inverse.
-%    J(wLDA) is unchanged if wLDA is scaled, so the length is ours to choose.
+% 3. LDA direction: wLDA = Sw^(-1) (mean1 - mean2)
 wLDA = Sw \ (mean1 - mean2);
 wLDA = wLDA / norm(wLDA);
 
-% 5. Project every point onto wLDA (each point becomes one number)
+% 4. Project every point onto wLDA (each point becomes one number)
 projLDA1 = wLDA' * X1;
 projLDA2 = wLDA' * X2;
 
-% 6. Classify by EUCLIDEAN DISTANCE to the projected class means.
-%    Each point is one number after projection, so we ask which class mean it
-%    is nearer to.  This is the same rule the face scripts use, and unlike a
-%    threshold it assumes nothing about which class lands on which side.
+
 accLDA = nearestMeanAccuracy(projLDA1, projLDA2);
 fprintf('LDA direction wLDA = (%.3f, %.3f), accuracy = %.1f%%\n', wLDA, accLDA);
 
 % For comparison: PCA direction = top eigenvector of the covariance
 X = [X1, X2];
-[V, D] = eig(cov(X'));
+C = cov(X');
+[V, D] = eig(C);
 [~, i] = max(diag(D));                    % eig is ASCENDING, so take the max
 wPCA = V(:, i);
 
@@ -81,15 +68,6 @@ fprintf('figure saved to %s\n', figDir);
 
 % ---------------------------------------------------------------------
 function acc = nearestMeanAccuracy(proj1, proj2)
-% Assign each projected point to the nearer class mean, by squared Euclidean
-% distance.  We compare SQUARED distances and never take a square root,
-% because sqrt is increasing and so cannot change which mean is nearer --
-% the same shortcut the face scripts use.
-%
-% In one dimension this is exactly the midpoint-threshold rule, so the
-% accuracy is unchanged; written this way it generalises to any number of
-% dimensions and needs no sign convention.
-
 centre1 = mean(proj1);
 centre2 = mean(proj2);
 

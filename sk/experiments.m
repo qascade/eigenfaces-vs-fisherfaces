@@ -3,10 +3,8 @@
 % E1  sweeping the PCA dimension m, with cond(S_W)   (study guide, section 24)
 % E2  label permutation: is the result real?
 % E3  choosing m by cross-validation, without peeking at the test set
-% E4  noise robustness
-% E5  error against lighting angle (Yale)
-% E6  sweeping the number of classes c
-% E7  glasses vs no glasses (the paper's section 3.3)
+% E4  error against lighting angle (Yale)
+% E5  sweeping the number of classes c
 %
 % Notation follows the study guide: d pixels, N training images, c classes,
 % m the PCA dimension kept before LDA, S_W and S_B the scatter matrices.
@@ -99,6 +97,7 @@ rateEigen = nnRate(Umatched'*(orlTrain-orlMeanFace), orlTrainLabels, Umatched'*(
 fisherW  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, orlN-orlC, orlC);
 rateFisher = nnRate(fisherW'*(orlTrain-orlMeanFace), orlTrainLabels, fisherW'*(orlTest-orlMeanFace), orlTestLabels);
 
+rng('default');                       % so this experiment does not depend on what ran before
 shuffledLabels = orlTrainLabels(randperm(orlN));
 rateEigenShuffled = nnRate(Umatched'*(orlTrain-orlMeanFace), shuffledLabels, Umatched'*(orlTest-orlMeanFace), orlTestLabels);
 fisherWshuffled  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, shuffledLabels, orlN-orlC, orlC);
@@ -174,44 +173,7 @@ title('Choosing m with and without looking at the test set');
 saveas(gcf, [figDir 'E3_cross_validation.png']);
 
 
-%% E4. Noise robustness
-% Fisherfaces are higher frequency than eigenfaces, because whitening scales
-% direction l by 1/sqrt(lambda_l) and so amplifies the fine-detail
-% directions most.  White noise has energy at every frequency, so they
-% should degrade faster.  Noise is added to the TEST images only.
-
-fprintf('\n\n=== E4: noise robustness (ORL) ===\n');
-
-sigmas = [0 20 40 80 160 320 640];
-rateEigenNoise = zeros(1, numel(sigmas));
-rateFisherNoise = zeros(1, numel(sigmas));
-Uk30  = orlEigenfaces(:, 1:30);
-fisherWnoise  = fisherfaces(orlEigenfaces, orlMeanFace, orlTrain, orlTrainLabels, orlN-orlC, orlC);
-
-fprintf('   sigma   eigenfaces   Fisherfaces\n');
-for i = 1:numel(sigmas)
-    rng(1);                               % same noise for both methods
-    noisy = orlTest + sigmas(i) * randn(size(orlTest));
-    rateEigenNoise(i) = nnRate(Uk30'*(orlTrain-orlMeanFace), orlTrainLabels, Uk30'*(noisy-orlMeanFace), orlTestLabels);
-    rateFisherNoise(i) = nnRate(fisherWnoise'*(orlTrain-orlMeanFace), orlTrainLabels, fisherWnoise'*(noisy-orlMeanFace), orlTestLabels);
-    fprintf('  %6d   %9.1f%%  %10.1f%%\n', sigmas(i), rateEigenNoise(i), rateFisherNoise(i));
-end
-fprintf('   drop from sigma 0 to %d: eigenfaces %.1f points, Fisherfaces %.1f\n', ...
-        sigmas(end), rateEigenNoise(1)-rateEigenNoise(end), rateFisherNoise(1)-rateFisherNoise(end));
-fprintf('   Nothing moves below sigma = 160: projection is a strong denoiser,\n');
-fprintf('   so the effect only appears far beyond realistic noise levels.\n');
-
-figure('Position', [100 100 600 380]);
-plot(sigmas, rateEigenNoise, '-s', 'LineWidth', 1.5); hold on;
-plot(sigmas, rateFisherNoise, '-^', 'LineWidth', 1.5); hold off; grid on;
-xlabel('noise standard deviation added to test images');
-ylabel('accuracy (%)');
-legend('eigenfaces (k=30)', 'Fisherfaces', 'Location', 'southwest');
-title('Degradation under pixel noise');
-saveas(gcf, [figDir 'E4_noise.png']);
-
-
-%% E5. Error against lighting angle (Yale)
+%% E4. Error against lighting angle (Yale)
 % Every Yale filename encodes the light direction, e.g.
 %     yaleB01_P00A+020E-40.pgm  ->  azimuth +20, elevation -40
 % Azimuth and elevation are rotations about perpendicular axes, so the
@@ -219,7 +181,7 @@ saveas(gcf, [figDir 'E4_noise.png']);
 %     theta = acos( cos(azimuth) * cos(elevation) )
 % The paper's bins are 0-12, 13-25, 26-50, 51-77 and above 77 degrees.
 
-fprintf('\n\n=== E5: error against lighting angle (Yale) ===\n');
+fprintf('\n\n=== E4: error against lighting angle (Yale) ===\n');
 
 nTe = numel(yaleTestNames);
 theta = zeros(1, nTe);
@@ -275,14 +237,14 @@ xlabel('angle of the light from the optical axis (degrees)');
 ylabel('error rate (%)'); grid on;
 legend('eigenfaces', 'Fisherfaces', 'Location', 'northwest');
 title('Yale: error grows with lighting angle');
-saveas(gcf, [figDir 'E5_lighting_angle.png']);
+saveas(gcf, [figDir 'E4_lighting_angle.png']);
 
 
-%% E6. Sweeping the number of classes c
+%% E5. Sweeping the number of classes c
 % rank(S_B) <= c-1, so there are at most c-1 Fisherfaces however many pixels
 % or images we have.  Vary c and watch that ceiling bind.
 
-fprintf('\n\n=== E6: sweeping the number of classes (ORL) ===\n');
+fprintf('\n\n=== E5: sweeping the number of classes (ORL) ===\n');
 
 classCounts = [2 4 8 16 32];
 numFisherfaces = zeros(1, numel(classCounts));
@@ -317,76 +279,7 @@ plot(classCounts, rateFisherByC, '-^', 'LineWidth', 1.5); hold off; grid on;
 xlabel('number of classes c'); ylabel('accuracy (%)');
 legend('eigenfaces', 'Fisherfaces', 'Location', 'southwest');
 title('both get harder as c grows');
-saveas(gcf, [figDir 'E6_number_of_classes.png']);
-
-
-%% E7. Glasses vs no glasses (the paper's section 3.3)
-% A different question: not WHO is this, but IS THIS PERSON WEARING GLASSES.
-% Two classes, so rank(S_B) <= 1 and there is exactly ONE Fisherface.
-%
-% ORL ships no glasses labels, so orl_glasses_labels.txt was made by looking
-% at all 400 images.  117 wear glasses and 8 people appear both ways.
-%
-% We balance the set 50/50 (otherwise always answering "no" scores 70.8% and
-% beats everything) and leave one SUBJECT out at a time, so the test face is
-% never seen in training and the classifier cannot cheat by recognising it.
-
-fprintf('\n\n=== E7: glasses vs no glasses (ORL) ===\n');
-
-G = readGlasses('orl_glasses_labels.txt');
-[allImages, allSubjects] = loadFaces(orlDir, 40, 10, 112*92);
-allGlasses = zeros(1, size(allImages, 2));
-for i = 1:size(allImages, 2)
-    k = sum(allSubjects(1:i) == allSubjects(i));      % which image of this person
-    allGlasses(i) = G(allSubjects(i), k);
-end
-fprintf('   %d of 400 images wear glasses (%.1f%%)\n', sum(allGlasses), 100*mean(allGlasses));
-fprintf('   on the UNbalanced set, always answering "no" would score %.1f%%,\n', ...
-        100*max(sum(allGlasses==0), sum(allGlasses==1))/numel(allGlasses));
-fprintf('   which beats any real method -- hence the balancing below.\n');
-
-glassesIdx = find(allGlasses == 1);
-noGlassesIdx = find(allGlasses == 0);
-noGlassesIdx = noGlassesIdx(randperm(numel(noGlassesIdx), numel(glassesIdx)));  % balance it
-keepIdx = sort([glassesIdx noGlassesIdx]);
-balIm = allImages(:, keepIdx);  balSubjects = allSubjects(keepIdx);  balGlasses = allGlasses(keepIdx);
-fprintf('   balanced subset: %d images, %.1f%% with glasses\n', numel(balGlasses), 100*mean(balGlasses));
-
-correctEigen = 0; correctFisher = 0; tot = 0;
-for p = 1:40
-    isTe = (balSubjects == p);
-    if sum(isTe) == 0, continue; end
-    foldTrain = balIm(:, ~isTe);  foldTrainLabels = balGlasses(~isTe) + 1;   % labels must be 1 and 2
-    teI = balIm(:,  isTe);  teL = balGlasses( isTe) + 1;
-    if numel(unique(foldTrainLabels)) < 2, continue; end
-
-    [glassesEigenfaces, glassesMeanFace] = doPCA(foldTrain);
-    glassesFisherW = fisherfaces(glassesEigenfaces, glassesMeanFace, foldTrain, foldTrainLabels, size(foldTrain,2) - 2, 2);
-    predFisherGlasses = nnPredict(glassesFisherW'*(foldTrain-glassesMeanFace), foldTrainLabels, glassesFisherW'*(teI-glassesMeanFace));
-    Uk10 = glassesEigenfaces(:, 1:10);
-    predEigenGlasses = nnPredict(Uk10'*(foldTrain-glassesMeanFace), foldTrainLabels, Uk10'*(teI-glassesMeanFace));
-
-    correctFisher = correctFisher + sum(predFisherGlasses == teL);
-    correctEigen = correctEigen + sum(predEigenGlasses == teL);
-    tot = tot + numel(teL);
-end
-fprintf('\n   method            our error    paper (Yale, 36 images)\n');
-fprintf('   PCA, k = 10       %8.1f%%              52.6%%\n', 100 - 100*correctEigen/tot);
-fprintf('   one Fisherface    %8.1f%%               5.3%%\n', 100 - 100*correctFisher/tot);
-fprintf('   always say "no"       50.0%%              50.0%%\n');
-fprintf('   We reproduce that PCA is near chance, but NOT that Fisherfaces\n');
-fprintf('   solve it.  Their 36 images were PAIRED (the same person with and\n');
-fprintf('   without glasses, one session); in ORL glasses come with changes\n');
-fprintf('   of pose, expression and session, so there is no clean signal.\n');
-
-figure('Position', [100 100 560 360]);
-bar([100-100*correctEigen/tot, 100-100*correctFisher/tot]); hold on;
-plot([0.5 2.5], [50 50], 'k--', 'LineWidth', 1.2); hold off;
-set(gca, 'XTickLabel', {'PCA (k=10)', 'one Fisherface'});
-ylabel('error rate (%)'); grid on;
-legend('error', 'always say no');
-title('Detecting glasses on a person never seen in training');
-saveas(gcf, [figDir 'E7_glasses.png']);
+saveas(gcf, [figDir 'E5_number_of_classes.png']);
 
 
 
@@ -505,25 +398,4 @@ end
 function rate = nnRate(trainFeat, trainLabels, testFeat, testLabels)
 pred = nnPredict(trainFeat, trainLabels, testFeat);
 rate = 100 * sum(pred == testLabels) / numel(testLabels);
-end
-
-
-function G = readGlasses(path)
-% Read the 40 x 10 table of 0/1 glasses labels.
-G = zeros(40, 10);
-fid = fopen(path, 'r');
-if fid < 0
-    error('cannot open %s', path);
-end
-while true
-    line = fgetl(fid);
-    if ~ischar(line), break; end
-    line = strtrim(line);
-    if isempty(line) || line(1) == '#', continue; end
-    v = sscanf(line(2:end), '%d');      % skip the leading 's'
-    if numel(v) == 11
-        G(v(1), :) = v(2:11)';
-    end
-end
-fclose(fid);
 end

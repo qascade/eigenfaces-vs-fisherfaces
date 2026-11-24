@@ -28,21 +28,18 @@ sets = { 'ORL',  '../ORL',          32,  6, 112,  92;
          'Yale', '../CroppedYale',  38, 40, 192, 168 };
 
 for setNo = 1:2
+    dataName  = sets{setNo, 1};
+    dataDir   = sets{setNo, 2};
+    numPeople = sets{setNo, 3};    % c = number of people (classes)
+    numTrain  = sets{setNo, 4};    % training images per person (rest are test)
+    imgHeight         = sets{setNo, 5};
+    imgWidth         = sets{setNo, 6};
 
-dataName  = sets{setNo, 1};
-dataDir   = sets{setNo, 2};
-numPeople = sets{setNo, 3};    % c = number of people (classes)
-numTrain  = sets{setNo, 4};    % training images per person (rest are test)
-imgHeight         = sets{setNo, 5};
-imgWidth         = sets{setNo, 6};
-
-% Fail loudly if the data is not there.  dir() on a missing folder returns an
-% EMPTY list rather than an error, so without this the script would carry on
-% with zero images and die much later for an unrelated-looking reason.
-if exist(dataDir, 'dir') == 0
-    error(['Cannot find %s.  Run this from the folder holding this file, ' ...
-           'with ORL/ and CroppedYale/ one level above it.'], dataDir);
-end
+    % Fail loudly if the data is not there
+    if exist(dataDir, 'dir') == 0
+        error(['Cannot find %s.  Run this from the folder holding this file, ' ...
+               'with ORL/ and CroppedYale/ one level above it.'], dataDir);
+    end
 
 fprintf('\n================ %s ================\n', dataName);
 
@@ -76,17 +73,15 @@ meanFace = mean(trainImages, 2);   % d x 1
 A = trainImages - meanFace;        % d x N, centred training images
 
 %% 3. PCA using the small matrix L = A'*A (N x N instead of d x d)
-% For Yale the covariance would be 32256 x 32256 = 8.3 GB.  We never form it.
 L = A' * A;                        % N x N
 [V, D] = eig(L);                   % eigenvectors of L
 [vals, order] = sort(diag(D), 'descend');   % eig is ASCENDING; flip it
 V = V(:, order);
 
-% If L*v = lambda*v, then (A*A')*(A*v) = lambda*(A*v),
 % so A*v is an eigenvector of the big covariance matrix with the same lambda.
 U = A * V;                         % d x N
 for i = 1:N
-    U(:, i) = U(:, i) / norm(U(:, i));   % ||A*v|| = sqrt(lambda), not 1
+    U(:, i) = U(:, i) / norm(U(:, i));   
 end
 U = U(:, 1:N-1);                   % last one has eigenvalue 0 (data was centred)
 
@@ -94,8 +89,6 @@ U = U(:, 1:N-1);                   % last one has eigenvalue 0 (data was centred
 % Each image is made zero mean and unit norm first.  That turns nearest
 % neighbour into CORRELATION matching, because for unit vectors
 %       ||a-b||^2 = 2 - 2*a'*b
-% so the nearest neighbour is the most correlated one.  If a projection
-% cannot beat this, it is not earning its place.
 trainNorm = normaliseColumns(trainImages);
 testNorm = normaliseColumns(testImages);
 accCorr = nearestNeighbour(trainNorm, trainLabels, testNorm, testLabels);
@@ -128,7 +121,9 @@ fprintf('Eigenfaces  (k = c-1 = %d): accuracy = %.2f%%\n', c-1, accEigMatched);
 % where the leading components carry identity (ORL).
 accDrop3 = 0; bestKdrop3 = 0;
 for kk = ks
-    if kk + 3 > size(U, 2), continue; end
+    if kk + 3 > size(U, 2)
+        continue; 
+    end
     Udrop3 = U(:, 4:(kk+3));          % skip the first three
     r = nearestNeighbour(Udrop3'*A, trainLabels, Udrop3'*(testImages-meanFace), testLabels);
     if r > accDrop3
@@ -218,8 +213,7 @@ fprintf('\nfigures saved to %s\n', figDir);
 
 function rate = nearestNeighbour(trainFeat, trainLabels, testFeat, testLabels)
 % Compare each test column with every training column and take the label of
-% the closest.  Squared distances: sqrt is increasing, so it cannot change
-% which neighbour is nearest.
+% the closest.
 correct = 0;
 for t = 1:size(testFeat, 2)
     bestSqDist = inf;
@@ -237,9 +231,8 @@ end
 rate = 100 * correct / size(testFeat, 2);
 end
 
-
-function Xnorm = normaliseColumns(X)
 % Make every image zero mean and unit norm.
+function Xnorm = normaliseColumns(X)
 Xnorm = X - mean(X, 1);
 for i = 1:size(Xnorm, 2)
     nrm = norm(Xnorm(:, i));
