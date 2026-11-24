@@ -24,7 +24,7 @@
 
 This guide covers only what is in the submission: the three scripts
 \texttt{toy.m}, \texttt{eigenfaces\_vs\_}\allowbreak\texttt{fisherfaces.m} and
-\texttt{experiments.m}, and the five experiments E1--E5. For each piece it
+\texttt{experiments.m}, and the four experiments E1--E4. For each piece it
 gives the theory, the code that implements it, and what can be asked about it.
 
 {\small\tableofcontents}
@@ -87,7 +87,7 @@ coordinates.
 file & runs & produces\\\midrule
 \texttt{toy.m} & the 2-D demonstration & \texttt{toy.png}\\
 \texttt{eigenfaces\_vs\_fisherfaces.m} & the four-method comparison & main table, two face montages\\
-\texttt{experiments.m} & E1--E5 & six figures\\\bottomrule
+\texttt{experiments.m} & E1--E4 & five figures\\\bottomrule
 \end{tabular}
 \end{center}
 
@@ -361,13 +361,6 @@ least $12^\circ$ off axis and 638 of 894 are beyond $50^\circ$. The test set is
 the hard tail of the lighting distribution, not a sample of it --- which is why
 the headline Yale numbers look so poor.
 
-\subsection{E5 --- sweeping the number of classes}
-For $c=2,4,8,16,32$ the number of Fisherfaces produced is $1,3,7,15,31$ ---
-exactly $c-1$ every time, so the rank bound is a live constraint and not merely
-a proof on a page. Fisherfaces are at $100\%$ for $c\le8$ on the \emph{same}
-six-images-per-person data on which they lose at $c=32$, which is why ``too few
-images per class'' cannot on its own be the explanation for ORL.
-
 \section{MATLAB constructs used}
 
 \begin{center}
@@ -405,18 +398,19 @@ construct & what to say about it\\\midrule
   must \emph{invert} $S_W$ and so leans on its \emph{smallest} eigenvalues,
   which are the worst estimated. ORL gives 5 degrees of freedom per person,
   Yale 39.
-\item[So it is just a sample-size problem?] Not only. E5 shows Fisherfaces at
-  $100\%$ for $c\le8$ on the same six-images-per-person data. What matters is
+\item[So it is just a sample-size problem?] Not only. What matters as much is
   how much \emph{structured} within-class variation there is to remove ---
-  illumination on Yale is large, shared and nearly low-dimensional; pose and
-  expression on ORL are small and idiosyncratic.
+  illumination on Yale is large, shared and nearly low-dimensional, so
+  discounting it removes a real nuisance; pose and expression on ORL are small
+  and idiosyncratic, so there is little for LDA to gain and an ill-estimated
+  $S_W$ to pay for it.
 \end{description}
 
 \subsection{Linear algebra}
 \begin{description}[style=nextline,leftmargin=0pt]
 \item[Why is there a limit of $c-1$ Fisherfaces?] $\operatorname{rank}S_B\le c-1$,
   because $\sum_jn_j(\mu_j-\mu)=0$ makes the class-mean vectors dependent.
-  E5 confirms the count is exactly $c-1$ at every $c$ tested.
+  Our code asserts the count: 31 Fisherfaces on ORL ($c=32$), 37 on Yale.
 \item[Why is $S_W$ singular in pixel space?] $\operatorname{rank}S_W\le N-c$,
   since each class's deviations sum to zero and contribute $n_j-1$ directions.
   For Yale $1482\ll32{,}256$.

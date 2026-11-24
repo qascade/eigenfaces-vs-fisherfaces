@@ -4,7 +4,6 @@
 % E2  label permutation: is the result real?
 % E3  choosing m by cross-validation, without peeking at the test set
 % E4  error against lighting angle (Yale)
-% E5  sweeping the number of classes c
 %
 % Notation follows the study guide: d pixels, N training images, c classes,
 % m the PCA dimension kept before LDA, S_W and S_B the scatter matrices.
@@ -238,48 +237,6 @@ ylabel('error rate (%)'); grid on;
 legend('eigenfaces', 'Fisherfaces', 'Location', 'northwest');
 title('Yale: error grows with lighting angle');
 saveas(gcf, [figDir 'E4_lighting_angle.png']);
-
-
-%% E5. Sweeping the number of classes c
-% rank(S_B) <= c-1, so there are at most c-1 Fisherfaces however many pixels
-% or images we have.  Vary c and watch that ceiling bind.
-
-fprintf('\n\n=== E5: sweeping the number of classes (ORL) ===\n');
-
-classCounts = [2 4 8 16 32];
-numFisherfaces = zeros(1, numel(classCounts));
-rateEigenByC = zeros(1, numel(classCounts));
-rateFisherByC = zeros(1, numel(classCounts));
-fprintf('       c     N   N-c   fisherfaces   eigenfaces   Fisherfaces\n');
-for i = 1:numel(classCounts)
-    c = classCounts(i);
-    [trainIm, foldTrainLabels, testIm, teL] = loadFaces(orlDir, c, 6, 112*92);
-    N = size(trainIm, 2);
-    [classEigenfaces, classMeanFace] = doPCA(trainIm);
-    UmatchedC = classEigenfaces(:, 1:max(1, c-1));
-    rateEigenByC(i) = nnRate(UmatchedC'*(trainIm-classMeanFace), foldTrainLabels, UmatchedC'*(testIm-classMeanFace), teL);
-    fisherWc = fisherfaces(classEigenfaces, classMeanFace, trainIm, foldTrainLabels, N-c, c);
-    numFisherfaces(i)  = size(fisherWc, 2);
-    rateFisherByC(i) = nnRate(fisherWc'*(trainIm-classMeanFace), foldTrainLabels, fisherWc'*(testIm-classMeanFace), teL);
-    fprintf('  %6d %5d %5d   %11d   %9.1f%%  %10.1f%%\n', ...
-            c, N, N-c, numFisherfaces(i), rateEigenByC(i), rateFisherByC(i));
-end
-fprintf('   The number of Fisherfaces equals c-1 on every row.\n');
-
-figure('Position', [100 100 900 340]);
-subplot(1,2,1);
-plot(classCounts, numFisherfaces, '-o', 'LineWidth', 1.5); hold on;
-plot(classCounts, classCounts-1, 'k--', 'LineWidth', 1.2); hold off; grid on;
-xlabel('number of classes c'); ylabel('number of Fisherfaces');
-legend('measured', 'c-1', 'Location', 'northwest');
-title('the c-1 ceiling is exactly met');
-subplot(1,2,2);
-plot(classCounts, rateEigenByC, '-s', 'LineWidth', 1.5); hold on;
-plot(classCounts, rateFisherByC, '-^', 'LineWidth', 1.5); hold off; grid on;
-xlabel('number of classes c'); ylabel('accuracy (%)');
-legend('eigenfaces', 'Fisherfaces', 'Location', 'southwest');
-title('both get harder as c grows');
-saveas(gcf, [figDir 'E5_number_of_classes.png']);
 
 
 

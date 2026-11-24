@@ -4,8 +4,8 @@ Submission: code, report, study guide, figures.  Databases are NOT included.
 SUBMITTED CODE  (base MATLAB only, no toolboxes)
   toy.m                        the 2-D problem: why PCA is not a classifier
   eigenfaces_vs_fisherfaces.m  the four-method comparison on ORL and Yale
-  experiments.m                experiments E1 to E5
-  figures/                     the nine figures the scripts draw
+  experiments.m                experiments E1 to E4
+  figures/                     the eight figures the scripts draw
 
 DOCUMENTS
   report.pdf        the project report      (report.tex is the source)

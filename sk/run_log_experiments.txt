@@ -63,14 +63,4 @@ loading Yale ... (slow)
    frontal lighting.  Every test image is at least 12 deg off axis.
 
 
-=== E5: sweeping the number of classes (ORL) ===
-       c     N   N-c   fisherfaces   eigenfaces   Fisherfaces
-       2    12    10             1       100.0%       100.0%
-       4    24    20             3        81.2%       100.0%
-       8    48    40             7        87.5%       100.0%
-      16    96    80            15        96.9%        93.8%
-      32   192   160            31        94.5%        90.6%
-   The number of Fisherfaces equals c-1 on every row.
-
-
 figures saved to figures/
