@@ -36,7 +36,7 @@ What varies & pose, expression, glasses & lighting only\\\bottomrule
 \end{center}
 The two databases are near-complements, so together they act as a controlled experiment.
 
-\textbf{What we implemented:} the Fisherfaces algorithm in full, plus three of the paper's four methods --- correlation, eigenfaces (including the ``drop the first three components'' variant) and Fisherfaces. \textbf{What we did not:} the Linear Subspace method of Section 2.3, which builds a separate 3-D illumination subspace per person, and the glasses/no-glasses experiment of Section 3.3. \textbf{Different data:} the paper's lighting experiment uses the Harvard database, which has no surviving public download, and its Yale set is a smaller 1997 database. Cropped Extended Yale B is by the same authors (2001) and is its successor, so Experiment 4 is \emph{modelled on} the paper's protocol rather than a reproduction of it.
+\textbf{What we implemented:} the Fisherfaces algorithm in full, plus three of the paper's four methods --- correlation, eigenfaces (including the ``drop the first three components'' variant) and Fisherfaces. \textbf{What we did not:} the Linear Subspace method of Section 2.3, which builds a separate 3-D illumination subspace per person. \textbf{Different data:} the paper's lighting experiment uses the Harvard database, which has no surviving public download, and its Yale set is a smaller 1997 database. Cropped Extended Yale B is by the same authors (2001) and is its successor, so our Yale comparison is \emph{modelled on} the paper's lighting experiment rather than a reproduction of it. Our glasses experiment uses ORL, where the paper used 36 paired Yale images --- a difference that turns out to matter.
 
 \section{The mathematics}
 Each image is flattened column-by-column into $x_i\in\mathbb R^d$. There are $N$ training images in $c$ classes; class $j$ has $n_j$ images and mean $\mu_j$, and $\mu$ is the overall mean.
@@ -166,31 +166,35 @@ Tuning on the test set & 60 & 95.3\\\bottomrule
 \captionof{figure}{The honest curve and the peeking curve; the star is the $m$ cross-validation selects, evaluated once on test.}
 \end{center}
 
-\subsection{E4 --- Error against lighting angle}
-The paper does not report one Yale number; it bins the test images by how far the lamp is from the camera axis. Yale filenames encode the direction, e.g.\ \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$, and $\theta=\arccos(\cos\mathrm{az}\cdot\cos\mathrm{el})$.
+\subsection{E4 --- Glasses or no glasses}
+A different question, and the paper's Section 3.3: not \emph{who} is this, but \emph{is this person wearing glasses}. With $c=2$, $\operatorname{rank}S_B\le1$ and there is exactly \textbf{one} Fisherface, $w\propto S_W^{-1}(\mu_1-\mu_2)$ --- the whole decision rests on a single direction.
+
+\textbf{Both methods are the same pipeline.} Project, then 1-nearest-neighbour with the glasses label attached to each training image. Only the subspace differs: PCA chooses its directions by total variance and never sees a label, so it can only help if glasses happen to be a large share of the variance --- they are not, being a small, localised, high-frequency detail that $k=10$ discards. LDA chooses the one direction that separates the two label groups while discounting variation \emph{within} them. This is the cleanest contrast between supervised and unsupervised in the project.
+
+ORL ships no glasses labels, so we labelled all 400 images by inspection: 117 wear glasses and 8 people appear both with and without, which is what makes the question non-trivial. On the raw set, always answering ``no'' scores 70.8\% and beats any real method, so we balanced it to 234 images (50/50) and used leave-one-\emph{subject}-out: the test face is never seen in training, so the classifier cannot cheat by recognising the person.
+
+\textbf{One balanced subset is not an experiment.} Which 117 no-glasses images get drawn moved the Fisherface error from 35.9\% to 50.9\%, so we average over ten draws and report the range too.
 \begin{center}
-\begin{tabular}{lccccc}\toprule
-Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
-Test images & 0 & 104 & 152 & 300 & 338\\\midrule
-Eigenfaces & --- & 1.0 & 30.9 & 88.3 & 93.8\\
-Fisherfaces & --- & \textbf{0.0} & \textbf{2.0} & \textbf{22.0} & \textbf{66.3}\\\bottomrule
+\begin{tabular}{lccc}\toprule
+Error (\%) & Ours (mean of 10) & Range & Paper (Yale, 36 images)\\\midrule
+PCA ($k=10$) & 43.1 & 37.2--48.3 & 52.6\\
+One Fisherface & \textbf{41.5} & 35.9--50.9 & \textbf{5.3}\\
+Always answer ``no'' & 50.0 & --- & 50.0\\\bottomrule
 \end{tabular}
 \end{center}
-Error climbs with angle for both methods and the gap \emph{widens}: at $26$--$50^\circ$ Fisherfaces are $15\times$ better, and even in the hardest bin they halve the error. This is the paper's central claim measured where it bites rather than averaged into one number.
-
-\textbf{The empty first bin is itself a finding.} Lighting is encoded as \texttt{A+020}/\texttt{A-020} and \texttt{dir} sorts names as text, where \texttt{'+'} precedes \texttt{'-'}. Taking the first 40 files per subject therefore puts every near-frontal lamp into training: \emph{every} test image is at least $12^\circ$ off axis and 638 of the 894 are beyond $50^\circ$. The test set is not a random sample of lighting, it is the hard tail of one, which is why the headline Yale figures look so poor.
+\textbf{We reproduce the paper's finding that PCA is near chance, but not that Fisherfaces solve the task.} We think the difference is the data, not the method: the paper's 36 images were \emph{paired} --- the same person photographed with and without glasses in one session, same lighting --- so glasses were the only thing that changed. In ORL glasses co-vary with pose, expression and session, so the single Fisher direction has no clean signal to lock onto. This is a negative result and we report it as one.
 \begin{center}
-\includegraphics[width=0.56\textwidth]{figures/E4_lighting_angle.png}
-\captionof{figure}{Error against lighting angle. The first bin is a gap, not a zero bar, because it holds no test images.}
+\includegraphics[width=0.48\textwidth]{figures/E4_glasses.png}
+\captionof{figure}{Mean error over ten balanced draws on a person never seen in training; the dashed line is the 50\% a coin achieves.}
 \end{center}
 
 \section{Conclusions}
 \begin{enumerate}
-\item \textbf{The paper's claim holds where the within-person nuisance is large and structured.} Under lighting change Fisherfaces take Yale from 34.23\% to 67.23\%, and are $15\times$ better than Eigenfaces in the $26$--$50^\circ$ bin.
+\item \textbf{The paper's claim holds where the within-person nuisance is large and structured.} Under lighting change Fisherfaces take Yale from 34.23\% to 67.23\%, nearly doubling the recognition rate, and they beat every other method we implemented there.
 \item \textbf{It is a claim about nuisance structure, not ``LDA is always better''.} On ORL --- pose and expression, 6 images per person --- Eigenfaces win, and Fisherfaces lose even to raw-pixel correlation. What decides the outcome is how much \emph{structured} within-class variation there is for LDA to discount, not the algorithm.
 \item \textbf{$m=N-c$ is the weakest part of the recipe.} It is the worst-conditioned valid choice, and a smaller $m$ does better on both databases. The blow-up at $\gamma\to1$ is predicted by Marchenko--Pastur, so this is not a quirk of our data.
 \item \textbf{Our honest ORL accuracy is 93.0\%, not 95.3\%.} The difference is whether $m$ was chosen by cross-validation or by looking at the test set.
-\item \textbf{Protocol mattered as much as the algorithm.} The text-sorted Yale split puts every frontal lamp in training and every hard one in test, and two things that looked like failures were not: Fisherfaces at 29.5\% was a missing unit-norm step, and the empty $0$--$12^\circ$ bin is that sorting accident, not a parsing bug.
+\item \textbf{Protocol mattered as much as the algorithm.} \texttt{dir} sorts filenames as text and \texttt{'+'} precedes \texttt{'-'}, so taking the first 40 Yale files per subject puts the near-frontal lamps in training and the extreme ones in test --- the headline Yale rates are measured on the hard tail of the lighting distribution, not a sample of it. And what looked like a broken method was not one: Fisherfaces at 29.5\% was a missing unit-norm step on the columns of $W$.
 \end{enumerate}
 
 \end{document}

@@ -336,30 +336,40 @@ validation images come from the same six-image pool as the training images, an
 easier problem. CV is used to \emph{rank} values of $m$, not to estimate the
 final accuracy.
 
-\subsection{E4 --- error against lighting angle}
-Yale filenames encode the lamp direction, e.g.\
-\texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$.
-Treating them as rotations about perpendicular axes, the direction cosine along
-the camera axis is the product of the cosines, so
-$\theta=\arccos(\cos\mathrm{az}\cdot\cos\mathrm{el})$.
+\subsection{E4 --- glasses or no glasses}
+A different question, and the paper's Section 3.3: not \emph{who} is this but
+\emph{is this person wearing glasses}. With $c=2$,
+$\operatorname{rank}S_B\le1$ and there is exactly \textbf{one} Fisherface,
+$w\propto S_W^{-1}(\mu_1-\mu_2)$.
 
-\begin{center}
-\begin{tabular}{lccccc}\toprule
-Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
-Images & 0 & 104 & 152 & 300 & 338\\\midrule
-Eigenfaces & --- & 1.0 & 30.9 & 88.3 & 93.8\\
-Fisherfaces & --- & 0.0 & 2.0 & 22.0 & 66.3\\\bottomrule
-\end{tabular}
-\end{center}
+\textbf{Both methods are the same pipeline}, and this is the point of the
+experiment. Each projects, then classifies by 1-nearest neighbour with the
+glasses label attached to each training image. Only the subspace differs. PCA
+ranks directions by total variance and never sees a label, so it can only help
+if glasses are a large share of the variance in the set --- they are not, being
+a small, localised, high-frequency detail, and the first $k=10$ components are
+exactly where such detail is discarded. LDA takes the single direction that
+separates the two label groups while discounting variation inside them. It is
+the cleanest illustration of supervised versus unsupervised in the project.
 
-Error climbs and the gap \emph{widens}: $15\times$ better at $26$--$50^\circ$.
+ORL ships no glasses labels, so all 400 images were labelled by inspection: 117
+wear glasses, 8 people appear both ways. On the raw set, always answering
+``no'' scores $70.8\%$ and beats any real method, so the set was balanced to
+234 images and evaluated leave-one-\emph{subject}-out, so the test face is never
+seen in training and neither method can cheat by recognising the person.
 
-\textbf{The empty first bin is itself a finding.} \texttt{dir} sorts names as
-text and \texttt{'+'} precedes \texttt{'-'}, so taking the first 40 files per
-subject puts every near-frontal lamp into training. Every test image is at
-least $12^\circ$ off axis and 638 of 894 are beyond $50^\circ$. The test set is
-the hard tail of the lighting distribution, not a sample of it --- which is why
-the headline Yale numbers look so poor.
+\textbf{One draw is not an experiment.} Which 117 of the 283 no-glasses images
+get drawn moved the Fisherface error from $35.9\%$ to $50.9\%$, so the whole
+leave-one-subject-out evaluation is repeated over ten draws.
+
+\textbf{Result: PCA $43.1\%$ error (range $37.2$--$48.3$), one Fisherface
+$41.5\%$ (range $35.9$--$50.9$), baseline $50\%$.}
+The paper got $52.6\%$ and $5.3\%$. \emph{We reproduce that PCA is near chance
+but not that Fisherfaces solve the task.} The likely cause is the data: the
+paper's 36 images were \emph{paired} --- the same person with and without
+glasses in one session --- so glasses were the only thing that changed. In ORL
+glasses co-vary with pose, expression and session, so one direction has no
+clean signal to lock onto.
 
 \section{MATLAB constructs used}
 
@@ -454,19 +464,26 @@ construct & what to say about it\\\midrule
 \item[Is $95.3\%$ your real ORL accuracy?] No. That is the best $m$ chosen by
   looking at the test set. Cross-validated, $m=40$ gives $93.0\%$, and the
   2.3-point gap is the optimism. $93.0\%$ is the honest figure.
-\item[Why are the Yale numbers so low?] The split. \texttt{dir} sorts as text
-  and \texttt{'+'} precedes \texttt{'-'}, so training gets every frontal lamp
-  and testing gets only hard angles --- every test image is at least $12^\circ$
-  off axis and 638 of 894 beyond $50^\circ$.
+\item[Why are the Yale numbers so low?] The split. \texttt{dir} sorts names as
+  text and \texttt{'+'} precedes \texttt{'-'}, so all 35 \texttt{A+} files sort
+  ahead of the 29 \texttt{A-} files. Taking the first 40 per subject therefore
+  puts every near-frontal lamp in training and leaves the extreme angles for
+  testing. The Yale rates are measured on the hard tail of the lighting
+  distribution, not on a sample of it.
 \item[What did you not implement?] The Linear Subspace method of the paper's
   Section 2.3, which builds a 3-D illumination subspace per person.
 \item[Did you use the paper's databases?] No, and the report says so. The
   paper's lighting experiment used the Harvard database, which has no surviving
   public download, and its Yale set was a smaller 1997 database. We used
-  Cropped Extended Yale B, by the same authors in 2001, so E4 is modelled on
-  the paper's protocol rather than a reproduction of it.
-\item[Anything that did not come out as the paper says?] Yes, and the report
-  says so: on ORL Fisherfaces lose to eigenfaces, $90.62\%$ against $95.31\%$,
+  Cropped Extended Yale B, by the same authors in 2001, so our Yale comparison
+  is modelled on the paper's lighting experiment rather than a reproduction of
+  it. The glasses experiment uses ORL, where the paper used 36 paired Yale
+  images --- a difference that turns out to matter.
+\item[Anything that did not come out as the paper says?] Two things, and the
+  report says so. E4: we reproduce that PCA is near chance on glasses but not
+  that Fisherfaces solve it ($41.5\%$ error against their $5.3\%$), because
+  their images were paired and ORL's are not. And on ORL Fisherfaces lose to
+  eigenfaces, $90.62\%$ against $95.31\%$,
   and lose to raw-pixel correlation as well. ORL varies by pose and expression
   rather than lighting, so there is little structured within-class variation for
   LDA to discount, and six images per person is a thin basis for estimating
@@ -488,8 +505,8 @@ Best $m$ vs the paper's $N-c$ (ORL) & $60$ vs $160$; $95.3$ vs $90.6$\\
 $\kappa(S_W)$ at $m=N-c$ & $7.9\times10^{7}$ (ORL), $6.0\times10^{12}$ (Yale)\\
 Number of Fisherfaces & exactly $c-1$, every $c$ tested\\
 Labels shuffled & $0.8\%$ and $0.0\%$ vs chance $3.1\%$\\
-Lighting $26$--$50^\circ$ & $30.9\%$ vs $2.0\%$ error\\
-Lighting $>77^\circ$ (hardest bin) & $93.8\%$ vs $66.3\%$ error\\\bottomrule
+Glasses, one Fisherface & $41.5\%$ error vs the paper's $5.3\%$\\
+Glasses, PCA $k=10$ & $43.1\%$ error, near the $50\%$ coin\\\bottomrule
 \end{tabular}
 \end{center}
 

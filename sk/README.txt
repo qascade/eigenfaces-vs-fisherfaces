@@ -14,6 +14,8 @@ DOCUMENTS
   run_log_*.txt     the output every number in both documents comes from
 
 SUPPORTING
+  orl_glasses_labels.txt   glasses labels for ORL, made by visual inspection,
+                           needed by experiment E4
   rename_yale.sh           one-time Yale folder rename, see below
   reference_code/          earlier code this submission was built from:
                              hw3_baseline_pca.m                 the HW3 PCA baseline
