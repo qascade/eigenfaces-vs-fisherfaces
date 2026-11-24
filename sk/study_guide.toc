@@ -1,0 +1,42 @@
+\contentsline {section}{\numberline {1}The idea in one page}{2}{section.1}%
+\contentsline {section}{\numberline {2}Notation}{3}{section.2}%
+\contentsline {section}{\numberline {3}What each script does}{3}{section.3}%
+\contentsline {section}{\numberline {4}The toy problem (\texttt {toy.m})}{3}{section.4}%
+\contentsline {section}{\numberline {5}Eigenfaces (\texttt {eigenfaces\_vs\_fisherfaces.m})}{4}{section.5}%
+\contentsline {subsection}{\numberline {5.1}The criterion}{4}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}The $L=X^{\top }X$ trick, and why it is necessary}{4}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Why centre at all?}{5}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}The correlation baseline}{5}{subsection.5.4}%
+\contentsline {section}{\numberline {6}Fisherfaces (\texttt {eigenfaces\_vs\_fisherfaces.m})}{5}{section.6}%
+\contentsline {subsection}{\numberline {6.1}The criterion and the generalised eigenproblem}{5}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}The two rank bounds}{5}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}The small-sample-size problem}{5}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}Solving it}{6}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}The normalisation step --- the most likely question}{6}{subsection.6.5}%
+\contentsline {subsection}{\numberline {6.6}Why $S_B$ needs no recentring in the code}{6}{subsection.6.6}%
+\contentsline {section}{\numberline {7}Why lighting is the hard case}{7}{section.7}%
+\contentsline {subsection}{\numberline {7.1}The Lambertian model}{7}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}The 3-D illumination subspace}{7}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Where the model breaks, and why the last bins are different}{7}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}Measuring the angle}{8}{subsection.7.4}%
+\contentsline {subsection}{\numberline {7.5}How good is CroppedYale for this?}{8}{subsection.7.5}%
+\contentsline {section}{\numberline {8}The experiments}{9}{section.8}%
+\contentsline {subsection}{\numberline {8.1}E1 --- sweeping $m$, with $\kappa (S_W)$}{9}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}E2 --- glasses or no glasses}{9}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}E3 --- error against lighting angle}{9}{subsection.8.3}%
+\contentsline {section}{\numberline {9}MATLAB constructs used}{10}{section.9}%
+\contentsline {section}{\numberline {10}A different family: Face-ARG matching}{10}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Appearance-based versus structural}{10}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}The Face-ARG model}{11}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Correspondence: directional, then one-to-one}{11}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}The similarity measure}{12}{subsection.10.4}%
+\contentsline {subsection}{\numberline {10.5}Why this matters for the single-sample problem}{12}{subsection.10.5}%
+\contentsline {subsection}{\numberline {10.6}Their numbers, and the price}{12}{subsection.10.6}%
+\contentsline {subsection}{\numberline {10.7}One more contrast the paper draws: PCA versus NMF}{13}{subsection.10.7}%
+\contentsline {subsection}{\numberline {10.8}Questions to expect on this}{13}{subsection.10.8}%
+\contentsline {section}{\numberline {11}Viva questions}{14}{section.11}%
+\contentsline {subsection}{\numberline {11.1}Core}{14}{subsection.11.1}%
+\contentsline {subsection}{\numberline {11.2}Linear algebra}{14}{subsection.11.2}%
+\contentsline {subsection}{\numberline {11.3}Implementation}{15}{subsection.11.3}%
+\contentsline {subsection}{\numberline {11.4}Protocol and honesty}{15}{subsection.11.4}%
+\contentsline {section}{\numberline {12}One-glance summary}{16}{section.12}%

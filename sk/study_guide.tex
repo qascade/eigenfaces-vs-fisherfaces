@@ -356,8 +356,19 @@ Azimuth and elevation are rotations about perpendicular axes, so in the usual
 spherical convention the lamp direction has unit vector
 \[ s/\|s\| = (\cos\mathrm{el}\sin\mathrm{az},\ \sin\mathrm{el},\
    \cos\mathrm{el}\cos\mathrm{az}), \]
-and the camera looks along $z=(0,0,1)$. The angle off the optical axis is
-therefore the inverse cosine of the third component:
+and the camera looks along $z=(0,0,1)$.
+
+\begin{center}
+\includegraphics[width=0.38\textwidth]{figures/angle_spherical.png}
+\captionof{figure}{Take $z$ as the camera's optical axis and the marked
+direction as the lamp. Then $\theta$ is exactly the angle the Yale subsets are
+defined by. Note that Yale records the lamp as (azimuth, elevation) and not as
+$(\theta,\varphi)$, which is why the conversion below is needed at all.
+Diagram: Wikimedia Commons, public domain.}
+\end{center}
+
+The angle off the optical axis is therefore the inverse cosine of the third
+component:
 \begin{equation}
 \theta=\arccos(\cos\mathrm{el}\cdot\cos\mathrm{az}).
 \label{eq:theta}

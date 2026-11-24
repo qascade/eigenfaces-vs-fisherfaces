@@ -142,7 +142,7 @@ $m$ & rate (\%) & $\kappa(S_W)$ & $m$ & rate (\%) & $\kappa(S_W)$\\\midrule
 \subsection{E2: Glasses or no glasses}
 A different question, and the paper's Section 3.3: not \emph{who} is this, but \emph{is this person wearing glasses}. With $c=2$, $\operatorname{rank}S_B\le1$ and there is exactly \textbf{one} Fisherface, $w\propto S_W^{-1}(\mu_1-\mu_2)$, so the whole decision rests on a single direction.
 
-\textbf{Both methods are the same pipeline.} Project, then 1-nearest-neighbour with the glasses label attached to each training image. Only the subspace differs: PCA chooses its directions by total variance and never sees a label, so it can only help if glasses happen to be a large share of the variance. They are not, being a small, localised, high-frequency detail that $k=10$ discards. LDA chooses the one direction that separates the two label groups while discounting variation \emph{within} them. This is the cleanest contrast between supervised and unsupervised in the project.
+\textbf{Both methods share one pipeline.} We first project, with PCA or with LDA, and then classify by 1-nearest neighbour, using the glasses label in place of the identity label. Only the projection differs. PCA picks its directions by total variance and never sees a label, so it can succeed only if glasses account for a large share of that variance. They do not: a pair of frames is a small, localised, high-frequency detail, and the leading $k=10$ components are exactly where such detail is discarded. LDA picks the single direction that best separates the two labelled groups while discounting the variation inside them. The comparison therefore isolates one thing, whether using the labels to choose the directions helps.
 
 ORL ships no glasses labels, so we labelled all 400 images by inspection: 117 wear glasses and 8 people appear both with and without, which is what makes the question non-trivial. On the raw set, always answering ``no'' scores 70.8\% and beats any real method, so we balanced it to 234 images (50/50) and used leave-one-\emph{subject}-out: the test face is never seen in training, so the classifier cannot cheat by recognising the person.
 
@@ -162,7 +162,16 @@ Always answer ``no'' & 50.0 & n/a & 50.0\\\bottomrule
 \end{center}
 
 \subsection{E3: Error against lighting angle}
-The paper does not report one Yale number; it bins the test images by how far the lamp is from the camera axis. Yale filenames encode the direction, e.g.\ \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$. Azimuth and elevation are rotations about perpendicular axes, so the direction cosine along the camera axis is the product of the cosines and $\theta=\arccos(\cos\mathrm{az}\cdot\cos\mathrm{el})$. The five bins below are the standard subsets of the Yale B literature.
+The paper does not report one Yale number; it bins the test images by how far the lamp is from the camera axis. Write the lamp direction as a unit vector in the usual spherical convention, with the camera looking along $z$:
+\[ \frac{s}{\|s\|}=(\cos\mathrm{el}\sin\mathrm{az},\ \sin\mathrm{el},\ \cos\mathrm{el}\cos\mathrm{az}), \]
+so the angle off the optical axis is the inverse cosine of the $z$ component,
+\[ \theta=\arccos\!\left(\cos\mathrm{el}\cdot\cos\mathrm{az}\right). \]
+Yale filenames give azimuth and elevation directly: \texttt{yaleB01\_P00A+020E-40} is azimuth $+20^\circ$, elevation $-40^\circ$, giving $\theta=44.0^\circ$.
+\begin{center}
+\includegraphics[width=0.36\textwidth]{figures/angle_spherical.png}
+\captionof{figure}{The angle being measured. Taking $z$ as the camera's optical axis and the marked direction as the lamp, $\theta$ is the quantity the bins below are built from. Yale parameterises the lamp by azimuth and elevation rather than by $(\theta,\varphi)$, hence the conversion above. Diagram: Wikimedia Commons, public domain.}
+\end{center}
+The five bins below are the standard subsets of the Yale B literature.
 \begin{center}
 \begin{tabular}{lccccc}\toprule
 Error (\%) & $0$--$12^\circ$ & $13$--$25^\circ$ & $26$--$50^\circ$ & $51$--$77^\circ$ & $>77^\circ$\\
@@ -173,7 +182,7 @@ Fisherfaces & n/a & \textbf{0.0} & \textbf{2.0} & \textbf{22.0} & \textbf{66.3}\
 \end{center}
 Error climbs with angle for both methods and the gap \emph{widens}: at $26$--$50^\circ$ Fisherfaces are $15\times$ better, and even in the hardest bin they halve the error. This is the paper's central claim measured where it bites rather than averaged into one number.
 
-\textbf{The empty first bin is itself a finding.} Lighting is encoded as \texttt{A+020}/\texttt{A-020} and \texttt{dir} sorts names as text, where \texttt{'+'} precedes \texttt{'-'}. Taking the first 40 files per subject therefore puts every near-frontal lamp into training: \emph{every} test image is at least $12^\circ$ off axis and 638 of the 894 are beyond $50^\circ$. The test set is not a random sample of lighting, it is the hard tail of one, which is why the headline Yale figures look so poor.
+\textbf{Why the first bin is empty.} This is a property of the split, not of the parser, and the chain is worth following. A subject with the full 64 images has 35 taken with positive azimuth and 29 with negative. The loader keeps the first 40 files that \texttt{dir} returns, and \texttt{dir} sorts names as text rather than by angle, with the character \texttt{'+'} ordering before \texttt{'-'}. Every \texttt{A+} file therefore sorts ahead of every \texttt{A-} file, so the first 40 are all 35 positive-azimuth images together with the 5 negative ones nearest zero (down to \texttt{A-015}). Those 40 contain every near-frontal lamp in the database. Testing is left with the far side only, starting at \texttt{A-020}: no test image falls within $12^\circ$ of the axis, which is why the first bin is empty, and 638 of the 894 lie beyond $50^\circ$. The Yale rates in this report are therefore measured on the hard tail of the lighting distribution rather than on a representative sample of it.
 
 \textbf{A caveat on the hardest bin.} Beyond roughly $60^\circ$ a large part of the face is in cast shadow, and the $\max(n\T s,0)$ term that the 3-D illumination subspace argument discards is exactly what produces those shadows. So the last two bins stress a regime the underlying theory does not cover, and the task drifts from recognition under illumination towards recognition from a partly visible face.
 \begin{center}
